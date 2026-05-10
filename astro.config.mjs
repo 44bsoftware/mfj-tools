@@ -17,6 +17,8 @@ export default defineConfig({
   output: 'static',
   trailingSlash: 'always',
   build: {
-    format: 'file',
+    // 'directory' emits e.g. dist/about/index.html, which Cloudflare Pages serves at /about/
+    // directly without the 308 trailing-slash-strip redirect that 'file' triggers.
+    format: 'directory',
   },
 })
