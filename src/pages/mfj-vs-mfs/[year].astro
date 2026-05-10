@@ -1,0 +1,458 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import { TAX_YEARS, SUPPORTED_YEARS } from '../../data/tax-years'
+
+export function getStaticPaths() {
+  return SUPPORTED_YEARS.map((year) => ({ params: { year } }))
+}
+
+const { year } = Astro.params
+const data = TAX_YEARS[year!]
+if (!data) throw new Error(`Unsupported year: ${year}`)
+
+const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+const stdMfj = fmt.format(data.standardDeduction.mfj)
+const stdMfs = fmt.format(data.standardDeduction.mfs)
+
+const faqs = [
+  {
+    q: 'When does filing separately (MFS) actually save money?',
+    a: `The most common winning scenarios: (1) one spouse has very large medical expenses and a much lower individual AGI than the joint AGI, so the 7.5%-of-AGI medical floor is easier to clear; (2) one spouse has substantial miscellaneous deductions tied to their AGI; (3) one spouse is on an income-driven student loan plan and lower individual AGI lowers the monthly payment; (4) one spouse has tax liabilities, fraud exposure, or other risk you don't want to be jointly responsible for. For most dual-income couples without these factors, MFJ wins by a meaningful margin.`,
+  },
+  {
+    q: 'What does MFS cost you in deductions and credits?',
+    a: `Filing separately disqualifies or limits several common tax breaks: the Earned Income Tax Credit, the American Opportunity and Lifetime Learning education credits, the Child & Dependent Care Credit (with rare exceptions), the student loan interest deduction, the traditional IRA deduction phaseouts kick in much sooner, and up to 85% of Social Security benefits become taxable regardless of income. Both spouses must also use the same deduction method — if one itemizes, the other cannot take the standard deduction.`,
+  },
+  {
+    q: 'Why is MFS often worse on taxes when the calculator says it costs more?',
+    a: `The MFS tax brackets are exactly half the width of MFJ brackets through the 35% rate, which means a single high-earning spouse hits higher marginal rates faster on their own return than the couple does jointly. The standard deduction is also halved (${stdMfs} vs ${stdMfj}). On top of that, MFS strips out credits and deductions. The combined effect is that MFS commonly costs 5–15% more in total federal tax for a typical dual-income household.`,
+  },
+  {
+    q: 'Does this calculator handle income-driven student loan repayment savings?',
+    a: `No. Loan-payment savings under an income-driven plan can outweigh the extra federal tax of MFS, but the math depends on your loan balance, plan type (SAVE, IBR, PAYE, etc.), and timeline. If you're weighing MFS purely for student loans, run the federal tax delta this tool gives you against the difference in your annualized loan payments under MFJ vs MFS AGI.`,
+  },
+  {
+    q: 'What about state taxes?',
+    a: `This calculator only computes federal income tax. Most states require your state filing status to match your federal one, so MFS federally usually means MFS at the state level too. Community property states (CA, AZ, ID, LA, NV, NM, TX, WA, WI) have special rules that allocate income between spouses on MFS returns regardless of who earned it — those situations need a tax professional.`,
+  },
+  {
+    q: 'Which spouse claims the kids on MFS?',
+    a: `Only one parent can claim each qualifying child as a dependent, and that parent gets the related credits (CTC, dependent care, etc.). This calculator assumes the higher-earning spouse claims all the kids, which usually maximizes the credit because the Child Tax Credit is limited by tax owed. If your situation is different — e.g., the lower earner has the only employer dependent care FSA — the optimal allocation may differ.`,
+  },
+]
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+}
+---
+
+<Layout
+  title={`MFJ vs MFS Calculator (${year}) — Should Married Couples File Jointly or Separately? — MFJ Tools`}
+  description={`Free side-by-side comparison of Married Filing Jointly vs Married Filing Separately. See which filing status saves you more on ${year} federal taxes given your wages, medical expenses, deductions, and kids.`}
+>
+  <script type='application/ld+json' set:html={JSON.stringify(faqSchema)} is:inline />
+
+  <nav class='text-sm text-gray-600 mb-4' aria-label='Breadcrumb'>
+    <a href='/' class='hover:underline'>Calculators</a>
+    <span class='mx-2'>/</span>
+    <span>MFJ vs MFS Comparison ({year})</span>
+  </nav>
+
+  <header class='mb-6'>
+    <h1 class='text-3xl md:text-4xl font-bold mb-3'>MFJ vs MFS Comparison Calculator ({year})</h1>
+    <p class='text-lg text-gray-700'>
+      Married Filing Jointly is the default for most couples — and usually the cheaper option —
+      but Married Filing Separately can save real money in specific situations. Enter your numbers
+      below to see which status comes out ahead on your {year} federal taxes.
+    </p>
+  </header>
+
+  <div class='mb-6 flex items-center gap-2 text-sm'>
+    <span class='text-gray-600'>Tax year:</span>
+    {SUPPORTED_YEARS.map((y) => (
+      <a
+        href={`/mfj-vs-mfs/${y}/`}
+        class:list={[
+          'px-3 py-1 rounded border',
+          y === year
+            ? 'bg-blue-600 text-white border-blue-600 font-medium'
+            : 'bg-white text-blue-700 border-gray-300 hover:border-blue-400',
+        ]}
+        aria-current={y === year ? 'page' : undefined}
+      >
+        {y}
+      </a>
+    ))}
+  </div>
+
+  <section class='grid gap-6 md:grid-cols-2'>
+    <form id='mfs-form' class='bg-white rounded-lg border border-gray-200 p-6 space-y-6' novalidate>
+      <div>
+        <h2 class='text-xl font-semibold text-blue-700 mb-4'>Wages</h2>
+        <div class='grid grid-cols-2 gap-3'>
+          <div>
+            <label for='wages-1' class='block text-sm font-medium mb-1'>Spouse 1 wages</label>
+            <div class='relative'>
+              <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+              <input id='wages-1' type='number' inputmode='decimal' min='0' step='1000' placeholder='95000'
+                class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+            </div>
+          </div>
+          <div>
+            <label for='wages-2' class='block text-sm font-medium mb-1'>Spouse 2 wages</label>
+            <div class='relative'>
+              <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+              <input id='wages-2' type='number' inputmode='decimal' min='0' step='1000' placeholder='65000'
+                class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 class='text-xl font-semibold text-blue-700 mb-1'>Deductions <span class='text-sm font-normal text-gray-600'>(optional)</span></h2>
+        <p class='text-sm text-gray-600 mb-3'>
+          Leave blank if you plan to take the standard deduction. Medical expenses are subject to the 7.5%-of-AGI floor —
+          on MFS that floor is calculated against each spouse's individual AGI, which is why high one-spouse medical bills can favor MFS.
+        </p>
+        <div class='grid grid-cols-2 gap-3'>
+          <div>
+            <label for='medical-1' class='block text-sm font-medium mb-1'>Spouse 1 medical expenses</label>
+            <div class='relative'>
+              <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+              <input id='medical-1' type='number' inputmode='decimal' min='0' step='100' placeholder='0'
+                class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+            </div>
+          </div>
+          <div>
+            <label for='medical-2' class='block text-sm font-medium mb-1'>Spouse 2 medical expenses</label>
+            <div class='relative'>
+              <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+              <input id='medical-2' type='number' inputmode='decimal' min='0' step='100' placeholder='0'
+                class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+            </div>
+          </div>
+          <div>
+            <label for='other-1' class='block text-sm font-medium mb-1'>Spouse 1 other itemized</label>
+            <div class='relative'>
+              <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+              <input id='other-1' type='number' inputmode='decimal' min='0' step='100' placeholder='0'
+                class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400'
+                aria-describedby='other-help' />
+            </div>
+          </div>
+          <div>
+            <label for='other-2' class='block text-sm font-medium mb-1'>Spouse 2 other itemized</label>
+            <div class='relative'>
+              <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+              <input id='other-2' type='number' inputmode='decimal' min='0' step='100' placeholder='0'
+                class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+            </div>
+          </div>
+        </div>
+        <p id='other-help' class='text-xs text-gray-500 mt-2'>
+          "Other itemized" = mortgage interest + state/local taxes (capped at $10,000) + charitable contributions + other Schedule A items.
+          Split between spouses based on whose name is on each obligation.
+        </p>
+      </div>
+
+      <div>
+        <label for='kids' class='block text-sm font-medium mb-1'>
+          Qualifying children under 17 <span class='text-gray-600 font-normal'>(for Child Tax Credit)</span>
+        </label>
+        <input id='kids' type='number' inputmode='numeric' min='0' max='10' step='1' placeholder='0'
+          class='w-32 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+      </div>
+    </form>
+
+    <aside id='mfs-results' class='bg-blue-50 border border-blue-200 rounded-lg p-6 space-y-4' aria-live='polite'>
+      <h2 class='text-xl font-semibold text-blue-900'>Comparison</h2>
+      <p id='result-empty' class='text-gray-600'>
+        Enter both spouses' wages to see which filing status saves you more.
+      </p>
+
+      <div id='result-detail' class='hidden space-y-4'>
+        <div id='recommendation' class='bg-white rounded p-4 border-2'>
+          <p class='text-sm text-gray-600 mb-1' id='recommendation-headline'></p>
+          <p class='text-3xl font-bold' id='recommendation-amount'></p>
+          <p class='text-sm text-gray-600 mt-1' id='recommendation-detail'></p>
+        </div>
+
+        <div class='grid grid-cols-2 gap-3'>
+          <div class='bg-white rounded p-4 border border-gray-300'>
+            <p class='text-sm font-medium text-gray-600 mb-1'>MFJ total tax</p>
+            <p class='text-xl font-bold text-gray-900' id='mfj-tax'>—</p>
+          </div>
+          <div class='bg-white rounded p-4 border border-gray-300'>
+            <p class='text-sm font-medium text-gray-600 mb-1'>MFS total tax</p>
+            <p class='text-xl font-bold text-gray-900' id='mfs-tax'>—</p>
+          </div>
+        </div>
+
+        <details class='text-sm'>
+          <summary class='cursor-pointer font-medium text-blue-800'>See the math</summary>
+          <div class='mt-4 space-y-4'>
+            <div>
+              <h3 class='font-semibold text-gray-900 mb-2'>MFJ (one return)</h3>
+              <dl class='space-y-1 text-gray-700'>
+                <div class='flex justify-between'><dt>Combined AGI</dt><dd id='mfj-agi' class='font-mono'>—</dd></div>
+                <div class='flex justify-between'><dt id='mfj-deduction-label'>Deduction</dt><dd id='mfj-deduction' class='font-mono'>—</dd></div>
+                <div class='flex justify-between'><dt>Taxable income</dt><dd id='mfj-taxable' class='font-mono'>—</dd></div>
+                <div class='flex justify-between'><dt>Tax before credits</dt><dd id='mfj-pre-credit' class='font-mono'>—</dd></div>
+                <div class='flex justify-between'><dt>Child Tax Credit</dt><dd id='mfj-ctc' class='font-mono'>—</dd></div>
+                <div class='flex justify-between font-semibold border-t border-blue-200 pt-1'><dt>Tax owed</dt><dd id='mfj-tax-detail' class='font-mono'>—</dd></div>
+              </dl>
+            </div>
+            <div>
+              <h3 class='font-semibold text-gray-900 mb-2'>MFS (two returns)</h3>
+              <p class='text-xs text-gray-600 mb-2' id='mfs-method'></p>
+              <dl class='space-y-1 text-gray-700'>
+                <div class='flex justify-between'><dt>Spouse 1 tax</dt><dd id='mfs-1-tax' class='font-mono'>—</dd></div>
+                <div class='flex justify-between'><dt>Spouse 2 tax</dt><dd id='mfs-2-tax' class='font-mono'>—</dd></div>
+                <div class='flex justify-between font-semibold border-t border-blue-200 pt-1'><dt>Combined</dt><dd id='mfs-tax-detail' class='font-mono'>—</dd></div>
+              </dl>
+            </div>
+          </div>
+        </details>
+
+        <p id='result-note' class='text-sm text-gray-700'></p>
+      </div>
+    </aside>
+  </section>
+
+  <section class='mt-12 article-content'>
+    <h2>How this calculator works</h2>
+    <p>
+      For each filing status, the calculator computes taxable income, applies the {year} federal tax brackets, and subtracts
+      the Child Tax Credit (capped at tax owed). For each side it picks the deduction approach — standard or itemized —
+      that produces the lower tax, with one important constraint: under MFS, if either spouse itemizes, the other spouse
+      cannot take the standard deduction. So the MFS comparison is "both standard" vs "both itemize," whichever is cheaper
+      across the household.
+    </p>
+    <p>
+      The 7.5%-of-AGI medical floor is applied against the joint AGI on MFJ and against each spouse's individual AGI on MFS.
+      That's the mechanism behind the classic MFS-for-medical scenario: a spouse with $40,000 in medical bills and a
+      $60,000 individual AGI can deduct most of it on MFS, but far less on a joint return where the combined AGI raises the floor.
+    </p>
+
+    <h2>What's not included</h2>
+    <ul class='list-disc'>
+      <li>Earned Income Tax Credit (MFS disqualifies you anyway)</li>
+      <li>Education credits — American Opportunity, Lifetime Learning (also lost on MFS)</li>
+      <li>Child & Dependent Care Credit (lost on MFS in most situations)</li>
+      <li>Student loan interest deduction (capped at $2,500 on MFJ, $0 on MFS)</li>
+      <li>IRA deduction phaseouts (much tighter on MFS)</li>
+      <li>Premium Tax Credit (MFS disqualifies you in most cases)</li>
+      <li>Self-employment income, capital gains, dividends, retirement distributions</li>
+      <li>Alternative Minimum Tax (AMT)</li>
+      <li>State and local income taxes</li>
+      <li>Community property income allocation rules (CA, AZ, ID, LA, NV, NM, TX, WA, WI)</li>
+    </ul>
+    <p>
+      If any of these apply meaningfully to your situation, the result here is a starting point — not a final answer.
+      Run your scenario through tax software or a CPA before changing your filing status.
+    </p>
+
+    <h2>Frequently asked questions</h2>
+    {faqs.map((f) => (
+      <div class='mt-4'>
+        <h3 class='text-lg font-semibold'>{f.q}</h3>
+        <p>{f.a}</p>
+      </div>
+    ))}
+  </section>
+
+  <section class='mt-12 text-sm text-gray-600'>
+    <h2 class='text-base font-semibold mb-2 text-gray-900'>Data sources for {year}</h2>
+    <ul class='list-disc ml-5 space-y-1'>
+      {data.sources.map((s) => (
+        <li>
+          <a href={s.url} class='text-blue-600 hover:underline' target='_blank' rel='noopener'>{s.label}</a>
+          {s.note && <span class='text-gray-500'> — {s.note}</span>}
+        </li>
+      ))}
+    </ul>
+    <p class='mt-2'>
+      See the <a href='/methodology/' class='text-blue-600 hover:underline'>full methodology</a> for calculation details and assumptions.
+    </p>
+  </section>
+
+  <section class='mt-12 p-6 bg-yellow-50 border-l-4 border-yellow-400 rounded text-sm text-gray-700'>
+    <strong>Disclaimer:</strong> This calculator provides a simplified federal tax estimate for informational purposes only.
+    It is not tax advice. Your actual liability depends on your full financial picture and may include items not modeled here.
+    Consult a CPA or enrolled agent before changing your filing status.
+  </section>
+</Layout>
+
+<script is:inline define:vars={{ taxData: data }}>
+  const BRACKETS_MFJ = taxData.brackets.mfj;
+  const BRACKETS_MFS = taxData.brackets.mfs;
+  const STD_MFJ = taxData.standardDeduction.mfj;
+  const STD_MFS = taxData.standardDeduction.mfs;
+  const CTC_PER_CHILD = taxData.ctc.perChild;
+  const CTC_PHASEOUT_MFJ = taxData.ctc.phaseoutStart.mfj;
+  const CTC_PHASEOUT_MFS = taxData.ctc.phaseoutStart.mfs;
+
+  function tax(taxable, brackets) {
+    if (taxable <= 0) return 0;
+    let total = 0, prev = 0;
+    for (const b of brackets) {
+      if (taxable <= b.upTo) return total + (taxable - prev) * b.rate;
+      total += (b.upTo - prev) * b.rate;
+      prev = b.upTo;
+    }
+    return total;
+  }
+
+  function ctc(kids, agi, phaseoutStart) {
+    if (kids <= 0) return 0;
+    const full = kids * CTC_PER_CHILD;
+    if (agi <= phaseoutStart) return full;
+    const reduction = Math.ceil((agi - phaseoutStart) / 1000) * 50;
+    return Math.max(0, full - reduction);
+  }
+
+  function num(id) {
+    const v = parseFloat(document.getElementById(id).value);
+    return Number.isFinite(v) && v >= 0 ? v : 0;
+  }
+
+  const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+  function computeMFJ(inputs) {
+    const agi = inputs.w1 + inputs.w2;
+    const medicalDeductible = Math.max(0, (inputs.m1 + inputs.m2) - 0.075 * agi);
+    const itemizedTotal = medicalDeductible + inputs.o1 + inputs.o2;
+    const usingItemized = itemizedTotal > STD_MFJ;
+    const deduction = usingItemized ? itemizedTotal : STD_MFJ;
+    const taxable = Math.max(0, agi - deduction);
+    const preCredit = tax(taxable, BRACKETS_MFJ);
+    const credit = Math.min(preCredit, ctc(inputs.kids, agi, CTC_PHASEOUT_MFJ));
+    return { agi, deduction, usingItemized, taxable, preCredit, credit, owed: preCredit - credit };
+  }
+
+  function computeMFSScenario(inputs, useItemized) {
+    const m1Deductible = Math.max(0, inputs.m1 - 0.075 * inputs.w1);
+    const m2Deductible = Math.max(0, inputs.m2 - 0.075 * inputs.w2);
+    const itemized1 = m1Deductible + inputs.o1;
+    const itemized2 = m2Deductible + inputs.o2;
+    const ded1 = useItemized ? itemized1 : STD_MFS;
+    const ded2 = useItemized ? itemized2 : STD_MFS;
+    const taxable1 = Math.max(0, inputs.w1 - ded1);
+    const taxable2 = Math.max(0, inputs.w2 - ded2);
+    const pre1 = tax(taxable1, BRACKETS_MFS);
+    const pre2 = tax(taxable2, BRACKETS_MFS);
+    const claimer = inputs.w1 >= inputs.w2 ? 1 : 2;
+    const claimerAgi = claimer === 1 ? inputs.w1 : inputs.w2;
+    const claimerPre = claimer === 1 ? pre1 : pre2;
+    const credit = Math.min(claimerPre, ctc(inputs.kids, claimerAgi, CTC_PHASEOUT_MFS));
+    const owed1 = claimer === 1 ? pre1 - credit : pre1;
+    const owed2 = claimer === 2 ? pre2 - credit : pre2;
+    return { useItemized, ded1, ded2, taxable1, taxable2, pre1, pre2, credit, owed1, owed2, total: owed1 + owed2 };
+  }
+
+  function computeMFS(inputs) {
+    const standard = computeMFSScenario(inputs, false);
+    const itemized = computeMFSScenario(inputs, true);
+    return itemized.total < standard.total ? itemized : standard;
+  }
+
+  function init() {
+    const form = document.getElementById('mfs-form');
+    if (!form) return;
+
+    const empty = document.getElementById('result-empty');
+    const detail = document.getElementById('result-detail');
+    const recBox = document.getElementById('recommendation');
+    const recHead = document.getElementById('recommendation-headline');
+    const recAmt = document.getElementById('recommendation-amount');
+    const recDet = document.getElementById('recommendation-detail');
+    const note = document.getElementById('result-note');
+
+    function recompute() {
+      const inputs = {
+        w1: num('wages-1'),
+        w2: num('wages-2'),
+        m1: num('medical-1'),
+        m2: num('medical-2'),
+        o1: num('other-1'),
+        o2: num('other-2'),
+        kids: Math.max(0, Math.floor(num('kids'))),
+      };
+
+      if (inputs.w1 + inputs.w2 <= 0) {
+        empty.classList.remove('hidden');
+        detail.classList.add('hidden');
+        return;
+      }
+
+      const mfj = computeMFJ(inputs);
+      const mfs = computeMFS(inputs);
+      const delta = mfs.total - mfj.owed;
+
+      empty.classList.add('hidden');
+      detail.classList.remove('hidden');
+
+      document.getElementById('mfj-tax').textContent = fmt.format(mfj.owed);
+      document.getElementById('mfs-tax').textContent = fmt.format(mfs.total);
+
+      document.getElementById('mfj-agi').textContent = fmt.format(mfj.agi);
+      document.getElementById('mfj-deduction').textContent = fmt.format(mfj.deduction);
+      document.getElementById('mfj-deduction-label').textContent = mfj.usingItemized ? 'Itemized deductions' : 'Standard deduction';
+      document.getElementById('mfj-taxable').textContent = fmt.format(mfj.taxable);
+      document.getElementById('mfj-pre-credit').textContent = fmt.format(mfj.preCredit);
+      document.getElementById('mfj-ctc').textContent = fmt.format(-mfj.credit);
+      document.getElementById('mfj-tax-detail').textContent = fmt.format(mfj.owed);
+
+      document.getElementById('mfs-method').textContent = mfs.useItemized
+        ? 'Both spouses itemizing (lower combined tax than both taking the standard deduction).'
+        : 'Both spouses taking the standard deduction.';
+      document.getElementById('mfs-1-tax').textContent = fmt.format(mfs.owed1);
+      document.getElementById('mfs-2-tax').textContent = fmt.format(mfs.owed2);
+      document.getElementById('mfs-tax-detail').textContent = fmt.format(mfs.total);
+
+      const tolerance = 1;
+      if (Math.abs(delta) < tolerance) {
+        recBox.className = 'bg-white rounded p-4 border-2 border-gray-400';
+        recHead.textContent = "It's a wash";
+        recAmt.textContent = '$0';
+        recAmt.className = 'text-3xl font-bold text-gray-700';
+        recDet.textContent = 'MFJ and MFS produce essentially the same federal tax for your inputs.';
+      } else if (delta > 0) {
+        recBox.className = 'bg-white rounded p-4 border-2 border-green-500';
+        recHead.textContent = 'File jointly (MFJ)';
+        recAmt.textContent = `Save ${fmt.format(delta)}`;
+        recAmt.className = 'text-3xl font-bold text-green-700';
+        recDet.textContent = `MFJ saves you ${fmt.format(delta)} versus filing separately.`;
+      } else {
+        recBox.className = 'bg-white rounded p-4 border-2 border-green-500';
+        recHead.textContent = 'File separately (MFS)';
+        recAmt.textContent = `Save ${fmt.format(-delta)}`;
+        recAmt.className = 'text-3xl font-bold text-green-700';
+        recDet.textContent = `MFS saves you ${fmt.format(-delta)} versus filing jointly — but read the caveats below before changing your filing status.`;
+      }
+
+      const notes = [];
+      if (delta < 0 && (inputs.m1 + inputs.m2 > 0)) {
+        notes.push("The MFS advantage here is driven largely by the medical-expense deduction clearing the 7.5%-of-AGI floor on a single spouse's lower individual AGI.");
+      }
+      if (delta < 0 && inputs.kids > 0) {
+        notes.push('Heads up: MFS limits or eliminates several credits beyond the Child Tax Credit shown here (Child & Dependent Care Credit, education credits, EITC) — if you claim those on MFJ, the MFS savings shown may not be real.');
+      }
+      if (delta > 0 && Math.abs(delta) / Math.max(1, mfj.owed) < 0.02) {
+        notes.push('The two scenarios are within 2% of each other — small changes to your real-world deductions or credits could flip the result.');
+      }
+      note.textContent = notes.join(' ');
+    }
+
+    form.addEventListener('input', recompute);
+  }
+
+  document.addEventListener('astro:page-load', init);
+</script>

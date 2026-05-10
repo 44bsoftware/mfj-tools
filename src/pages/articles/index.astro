@@ -1,0 +1,42 @@
+---
+import { getCollection } from 'astro:content'
+import Layout from '../../layouts/Layout.astro'
+
+const articles = (await getCollection('articles')).sort(
+  (a, b) => b.data.publishedAt.getTime() - a.data.publishedAt.getTime(),
+)
+
+const dateFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+---
+
+<Layout
+  title='Guides for Married Couples Filing Taxes — MFJ Tools'
+  description={"Plain-English guides for married couples on W-4 withholding, MFJ vs MFS, the marriage penalty, OBBBA tax changes, and more."}
+>
+  <nav class='text-sm text-gray-600 mb-4' aria-label='Breadcrumb'>
+    <a href='/' class='hover:underline'>Calculators</a>
+    <span class='mx-2'>/</span>
+    <span>Guides</span>
+  </nav>
+
+  <header class='mb-8'>
+    <h1 class='text-3xl md:text-4xl font-bold mb-3'>Tax Guides for Married Couples</h1>
+    <p class='text-lg text-gray-700'>
+      Practical, jargon-light explainers on the tax issues that matter most to married couples filing jointly —
+      W-4 withholding, MFJ vs MFS, the marriage penalty, recent law changes, and more.
+    </p>
+  </header>
+
+  <section class='space-y-4'>
+    {articles.map((article) => (
+      <a
+        href={`/articles/${article.id}/`}
+        class='block p-6 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow'
+      >
+        <h2 class='text-xl font-semibold text-blue-700 mb-1'>{article.data.title}</h2>
+        <p class='text-sm text-gray-500 mb-2'>{dateFmt.format(article.data.publishedAt)}</p>
+        <p class='text-gray-700'>{article.data.description}</p>
+      </a>
+    ))}
+  </section>
+</Layout>

@@ -1,0 +1,371 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import { TAX_YEARS, SUPPORTED_YEARS, CURRENT_TAX_YEAR } from '../../data/tax-years'
+
+export function getStaticPaths() {
+  return SUPPORTED_YEARS.map((year) => ({ params: { year } }))
+}
+
+const { year } = Astro.params
+const data = TAX_YEARS[year!]
+if (!data) throw new Error(`Unsupported year: ${year}`)
+
+const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+const stdMfj = fmt.format(data.standardDeduction.mfj)
+
+const faqs = [
+  {
+    q: 'Why do two-earner couples often under-withhold?',
+    a: `When both spouses check "Married filing jointly" on their W-4 with no other adjustments, each employer withholds as if that job were the household's only income. The standard deduction is effectively applied twice and the lower tax brackets get filled twice — so the combined withholding falls short of the actual joint tax liability.`,
+  },
+  {
+    q: 'What is Step 2(c) on the W-4?',
+    a: `Step 2(c) is a checkbox on the W-4 that signals "there are only two jobs total in this household and they pay roughly the same." When both spouses check it on their own W-4s, each employer uses approximately half the standard deduction and half-width brackets, which produces close-to-correct withholding. It works best when the two paychecks are similar; if one spouse earns much more, the math is off and you should use the extra withholding approach instead.`,
+  },
+  {
+    q: 'Where do I enter the extra withholding amount?',
+    a: `On the higher earner's W-4, in Step 4(c) ("Extra withholding"). Enter the per-paycheck dollar amount this calculator gives you. Submit the updated W-4 to that spouse's payroll/HR department; do not put extra withholding on the lower earner's W-4.`,
+  },
+  {
+    q: 'Why put the extra withholding on the higher earner?',
+    a: `Two reasons. First, the higher earner has more cash flow per paycheck to absorb the deduction without going negative. Second, the higher earner is more likely to have pay periods remaining throughout the year (less likely to be hourly/seasonal), making the per-paycheck math more reliable.`,
+  },
+  {
+    q: 'Does this account for bonuses, side income, or itemized deductions?',
+    a: `No — this is a wages-only estimate using the standard deduction. If you have substantial non-wage income (1099, investments, rental), large itemized deductions, or expect bonuses, the result will be off. Use the IRS Tax Withholding Estimator at irs.gov for those cases or consult a tax professional.`,
+  },
+  {
+    q: 'What tax year does this use?',
+    a: `This calculator uses the ${year} MFJ standard deduction (${stdMfj}) and ${year} federal tax brackets.`,
+  },
+]
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+}
+---
+
+<Layout
+  title={`Two-Earner W-4 Withholding Calculator (${year}) — MFJ Tools`}
+  description={`Free ${year} calculator for married couples filing jointly when both spouses work. Find the extra federal withholding to enter on Step 4(c) of your W-4 so you don't owe at tax time.`}
+>
+  <script type='application/ld+json' set:html={JSON.stringify(faqSchema)} is:inline />
+
+  <nav class='text-sm text-gray-600 mb-4' aria-label='Breadcrumb'>
+    <a href='/' class='hover:underline'>Calculators</a>
+    <span class='mx-2'>/</span>
+    <span>Two-Earner W-4 Calculator ({year})</span>
+  </nav>
+
+  <header class='mb-6'>
+    <h1 class='text-3xl md:text-4xl font-bold mb-3'>Two-Earner W-4 Withholding Calculator ({year})</h1>
+    <p class='text-lg text-gray-700'>
+      When both spouses work and check "Married filing jointly" on their W-4s, the default
+      withholding is almost always too low. This tool tells you the extra amount to enter on
+      Step 4(c) of the higher earner's W-4 so you don't owe at tax time.
+    </p>
+  </header>
+
+  <div class='mb-6 flex items-center gap-2 text-sm'>
+    <span class='text-gray-600'>Tax year:</span>
+    {SUPPORTED_YEARS.map((y) => (
+      <a
+        href={`/w4-calculator/${y}/`}
+        class:list={[
+          'px-3 py-1 rounded border',
+          y === year
+            ? 'bg-blue-600 text-white border-blue-600 font-medium'
+            : 'bg-white text-blue-700 border-gray-300 hover:border-blue-400',
+        ]}
+        aria-current={y === year ? 'page' : undefined}
+      >
+        {y}
+      </a>
+    ))}
+  </div>
+
+  <section class='grid gap-6 md:grid-cols-2'>
+    <form id='w4-form' class='bg-white rounded-lg border border-gray-200 p-6 space-y-5' novalidate>
+      <h2 class='text-xl font-semibold text-blue-700'>Your situation</h2>
+
+      <div>
+        <label for='wages-higher' class='block text-sm font-medium mb-1'>
+          Higher earner's annual gross wages
+        </label>
+        <div class='relative'>
+          <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+          <input id='wages-higher' name='wages-higher' type='number' inputmode='decimal' min='0' step='1000' placeholder='95000'
+            class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400'
+            aria-describedby='wages-higher-help' />
+        </div>
+        <p id='wages-higher-help' class='text-xs text-gray-500 mt-1'>
+          Annual salary or projected wages, before taxes and pre-tax deductions.
+        </p>
+      </div>
+
+      <div>
+        <label for='wages-lower' class='block text-sm font-medium mb-1'>
+          Lower earner's annual gross wages
+        </label>
+        <div class='relative'>
+          <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+          <input id='wages-lower' name='wages-lower' type='number' inputmode='decimal' min='0' step='1000' placeholder='65000'
+            class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+        </div>
+      </div>
+
+      <div>
+        <label for='pay-periods' class='block text-sm font-medium mb-1'>
+          Higher earner's pay periods remaining this year
+        </label>
+        <select id='pay-periods' name='pay-periods'
+          class='w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white'>
+          <option value='52'>52 (weekly, full year)</option>
+          <option value='26' selected>26 (biweekly, full year)</option>
+          <option value='24'>24 (semi-monthly, full year)</option>
+          <option value='12'>12 (monthly, full year)</option>
+          <option value='custom'>Custom…</option>
+        </select>
+        <input id='pay-periods-custom' type='number' min='1' max='52' step='1' placeholder='Number of remaining paychecks'
+          class='hidden w-full mt-2 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+        <p class='text-xs text-gray-500 mt-1'>
+          Adjusting mid-year? Pick "Custom" and enter how many paychecks the higher earner has left.
+        </p>
+      </div>
+    </form>
+
+    <aside id='w4-results' class='bg-blue-50 border border-blue-200 rounded-lg p-6 space-y-4' aria-live='polite'>
+      <h2 class='text-xl font-semibold text-blue-900'>Your result</h2>
+      <p id='result-empty' class='text-gray-600'>
+        Enter both spouses' annual wages to see your recommended W-4 adjustment.
+      </p>
+
+      <div id='result-detail' class='hidden space-y-4'>
+        <div class='bg-white rounded p-4 border border-blue-300'>
+          <p class='text-sm text-gray-600 mb-1'>Add to Step 4(c) of higher earner's W-4</p>
+          <p class='text-3xl font-bold text-blue-700'>
+            <span id='extra-per-period'>$0</span>
+            <span class='text-base font-normal text-gray-600'>per paycheck</span>
+          </p>
+          <p id='extra-annual' class='text-sm text-gray-600 mt-1'></p>
+        </div>
+
+        <details class='text-sm'>
+          <summary class='cursor-pointer font-medium text-blue-800'>See the math</summary>
+          <dl class='mt-3 space-y-2 text-gray-700'>
+            <div class='flex justify-between'><dt>Combined annual wages</dt><dd id='math-combined' class='font-mono'>—</dd></div>
+            <div class='flex justify-between'>
+              <dt>Joint taxable income (after {stdMfj} std. deduction)</dt>
+              <dd id='math-taxable' class='font-mono'>—</dd>
+            </div>
+            <div class='flex justify-between'><dt>Estimated joint federal tax</dt><dd id='math-joint-tax' class='font-mono'>—</dd></div>
+            <div class='flex justify-between'><dt>Default withholding on higher earner's job</dt><dd id='math-wh-1' class='font-mono'>—</dd></div>
+            <div class='flex justify-between'><dt>Default withholding on lower earner's job</dt><dd id='math-wh-2' class='font-mono'>—</dd></div>
+            <div class='flex justify-between font-semibold border-t border-blue-200 pt-2'>
+              <dt>Shortfall</dt><dd id='math-shortfall' class='font-mono'>—</dd>
+            </div>
+          </dl>
+        </details>
+
+        <p id='result-note' class='text-sm text-gray-700'></p>
+      </div>
+    </aside>
+  </section>
+
+  <section class='mt-12 article-content'>
+    <h2>How to apply the result</h2>
+    <ol class='list-decimal'>
+      <li>Download a fresh W-4 from the IRS website (or get one from your HR/payroll team).</li>
+      <li>Fill in Step 1 (name, address, SSN, "Married filing jointly").</li>
+      <li>Skip Step 2 unless you also want to use the multiple-jobs worksheet — for most two-earner couples, the extra withholding approach below is simpler.</li>
+      <li>In <strong>Step 4(c)</strong>, write the per-paycheck dollar amount this calculator gave you.</li>
+      <li>Sign Step 5 and submit the form to the higher earner's payroll department. The lower earner's W-4 does not need to change (assuming it has MFJ checked with no other adjustments).</li>
+    </ol>
+
+    <h2>How this calculator works</h2>
+    <p>
+      The IRS withholding tables assume the W-4 you submit reflects your entire household income.
+      So when both spouses submit a W-4 with "Married filing jointly" checked and nothing in Steps 2–4,
+      <em>each</em> employer calculates withholding using the full {stdMfj} MFJ standard deduction and
+      starts at the 10% bracket. The standard deduction effectively gets used twice and the lower
+      brackets get double-filled, so combined annual withholding undershoots the household's actual tax bill.
+    </p>
+    <p>The calculator computes the gap directly:</p>
+    <ul class='list-disc'>
+      <li><strong>Joint tax owed</strong> = federal tax on (combined wages − {stdMfj}), using {year} MFJ brackets.</li>
+      <li><strong>Default withholding</strong> = sum of what each employer would withhold treating its job as the only household income.</li>
+      <li><strong>Shortfall</strong> = joint tax − default withholding.</li>
+      <li><strong>Per-paycheck extra</strong> = shortfall ÷ pay periods remaining.</li>
+    </ul>
+
+    <h2>What this calculator doesn't cover</h2>
+    <ul class='list-disc'>
+      <li>Non-wage income (1099, investment, rental, retirement distributions)</li>
+      <li>Bonuses, RSUs, or other supplemental wages with separate withholding rules</li>
+      <li>Itemized deductions, the QBI deduction, or above-the-line deductions beyond the standard deduction</li>
+      <li>Tax credits (Child Tax Credit, Saver's Credit, etc.) — those go in Step 3 of the W-4 and reduce withholding further</li>
+      <li>State and local income tax withholding</li>
+      <li>Pre-tax 401(k), HSA, or insurance deductions that reduce taxable wages — if you contribute heavily, enter your wages <em>after</em> those deductions for a closer estimate</li>
+    </ul>
+    <p>
+      For a more comprehensive estimate, use the
+      <a href='https://www.irs.gov/individuals/tax-withholding-estimator' target='_blank' rel='nofollow noopener'>
+        IRS Tax Withholding Estimator</a>.
+    </p>
+
+    <h2>Frequently asked questions</h2>
+    {faqs.map((f) => (
+      <div class='mt-4'>
+        <h3 class='text-lg font-semibold'>{f.q}</h3>
+        <p>{f.a}</p>
+      </div>
+    ))}
+  </section>
+
+  <section class='mt-12 text-sm text-gray-600'>
+    <h2 class='text-base font-semibold mb-2 text-gray-900'>Data sources for {year}</h2>
+    <ul class='list-disc ml-5 space-y-1'>
+      {data.sources.map((s) => (
+        <li>
+          <a href={s.url} class='text-blue-600 hover:underline' target='_blank' rel='noopener'>{s.label}</a>
+          {s.note && <span class='text-gray-500'> — {s.note}</span>}
+        </li>
+      ))}
+    </ul>
+    <p class='mt-2'>
+      See the <a href='/methodology/' class='text-blue-600 hover:underline'>full methodology</a> for calculation details and assumptions.
+    </p>
+  </section>
+
+  <section class='mt-12 p-6 bg-yellow-50 border-l-4 border-yellow-400 rounded text-sm text-gray-700'>
+    <strong>Disclaimer:</strong> This calculator provides a simplified estimate for planning purposes only.
+    It is not tax advice. The result assumes wages-only income, the standard deduction, and {year} federal
+    tax brackets. Your actual tax liability will depend on your full financial picture. Consult a CPA or
+    enrolled agent for advice specific to your situation.
+  </section>
+</Layout>
+
+<script is:inline define:vars={{ taxData: data }}>
+  const BRACKETS_MFJ = taxData.brackets.mfj;
+  const STD_DEDUCTION_MFJ = taxData.standardDeduction.mfj;
+
+  function taxOnTaxableIncome(taxable) {
+    if (taxable <= 0) return 0;
+    let tax = 0;
+    let prev = 0;
+    for (const bracket of BRACKETS_MFJ) {
+      if (taxable <= bracket.upTo) {
+        tax += (taxable - prev) * bracket.rate;
+        return tax;
+      }
+      tax += (bracket.upTo - prev) * bracket.rate;
+      prev = bracket.upTo;
+    }
+    return tax;
+  }
+
+  function withholdingOnWages(wages) {
+    return taxOnTaxableIncome(Math.max(0, wages - STD_DEDUCTION_MFJ));
+  }
+
+  const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+  function init() {
+    const form = document.getElementById('w4-form');
+    if (!form) return;
+
+    const higherInput = document.getElementById('wages-higher');
+    const lowerInput = document.getElementById('wages-lower');
+    const periodsSelect = document.getElementById('pay-periods');
+    const periodsCustom = document.getElementById('pay-periods-custom');
+    const empty = document.getElementById('result-empty');
+    const detail = document.getElementById('result-detail');
+    const extraPerPeriod = document.getElementById('extra-per-period');
+    const extraAnnual = document.getElementById('extra-annual');
+    const note = document.getElementById('result-note');
+
+    function getPayPeriods() {
+      if (periodsSelect.value === 'custom') {
+        const v = parseInt(periodsCustom.value, 10);
+        return Number.isFinite(v) && v > 0 ? v : null;
+      }
+      return parseInt(periodsSelect.value, 10);
+    }
+
+    function recompute() {
+      const higher = parseFloat(higherInput.value);
+      const lower = parseFloat(lowerInput.value);
+      const periods = getPayPeriods();
+
+      if (!Number.isFinite(higher) || !Number.isFinite(lower) || higher < 0 || lower < 0 || !periods) {
+        empty.classList.remove('hidden');
+        detail.classList.add('hidden');
+        return;
+      }
+
+      const w1 = Math.max(higher, lower);
+      const w2 = Math.min(higher, lower);
+      const swapped = higher < lower;
+
+      const combined = w1 + w2;
+      const taxable = Math.max(0, combined - STD_DEDUCTION_MFJ);
+      const jointTax = taxOnTaxableIncome(taxable);
+      const wh1 = withholdingOnWages(w1);
+      const wh2 = withholdingOnWages(w2);
+      const shortfall = jointTax - (wh1 + wh2);
+
+      empty.classList.add('hidden');
+      detail.classList.remove('hidden');
+
+      document.getElementById('math-combined').textContent = fmt.format(combined);
+      document.getElementById('math-taxable').textContent = fmt.format(taxable);
+      document.getElementById('math-joint-tax').textContent = fmt.format(jointTax);
+      document.getElementById('math-wh-1').textContent = fmt.format(wh1);
+      document.getElementById('math-wh-2').textContent = fmt.format(wh2);
+      document.getElementById('math-shortfall').textContent = fmt.format(shortfall);
+
+      if (shortfall <= 0) {
+        extraPerPeriod.textContent = '$0';
+        extraAnnual.textContent = 'No additional withholding needed — the default W-4 should cover your joint tax.';
+        note.textContent = '';
+        return;
+      }
+
+      const perPeriod = Math.ceil(shortfall / periods);
+      extraPerPeriod.textContent = fmt.format(perPeriod);
+      extraAnnual.textContent = `Approx. ${fmt.format(perPeriod * periods)} extra over ${periods} paychecks (covers the ${fmt.format(shortfall)} shortfall).`;
+
+      const notes = [];
+      if (swapped) {
+        notes.push('Note: you entered the lower wage in the "higher earner" field — the calculation has been adjusted to apply the extra withholding to the larger paycheck.');
+      }
+      const ratio = w2 / w1;
+      if (ratio >= 0.85) {
+        notes.push('Tip: because both spouses earn similar amounts, you could alternatively check the Step 2(c) box on both W-4s instead of using extra withholding. Both approaches work; Step 2(c) is simpler if neither of you ever changes jobs mid-year.');
+      }
+      note.textContent = notes.join(' ');
+    }
+
+    function syncCustomVisibility() {
+      if (periodsSelect.value === 'custom') {
+        periodsCustom.classList.remove('hidden');
+      } else {
+        periodsCustom.classList.add('hidden');
+      }
+      recompute();
+    }
+
+    higherInput.addEventListener('input', recompute);
+    lowerInput.addEventListener('input', recompute);
+    periodsSelect.addEventListener('change', syncCustomVisibility);
+    periodsCustom.addEventListener('input', recompute);
+  }
+
+  document.addEventListener('astro:page-load', init);
+</script>

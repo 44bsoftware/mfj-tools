@@ -1,0 +1,110 @@
+---
+import '../styles/global.css'
+import { ClientRouter } from 'astro:transitions'
+
+interface Props {
+  title: string
+  description: string
+  canonicalURL?: string
+  noindex?: boolean
+}
+
+// Astro's `format: 'file'` makes Astro.url.pathname end in `.html` for non-index routes.
+// Normalize back to the friendly URL the rest of the site links to (`trailingSlash: 'always'`).
+const friendlyPath = (() => {
+  const raw = Astro.url.pathname.replace(/\.html$/, '')
+  if (raw === '' || raw === '/') return '/'
+  return raw.endsWith('/') ? raw : `${raw}/`
+})()
+
+const {
+  title,
+  description,
+  canonicalURL = new URL(friendlyPath, Astro.site).toString(),
+  noindex = false,
+} = Astro.props
+
+const isDev = import.meta.env.DEV
+
+const websiteSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'MFJ Tools',
+  url: 'https://mfjtools.com',
+  description: 'Free calculators and guides for couples filing taxes — joint vs separate, W-4 withholding, marriage tax penalty, and more.',
+}
+
+const organizationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'MFJ Tools',
+  url: 'https://mfjtools.com',
+  description: 'Tax calculators and guides for married couples.',
+}
+---
+
+<!doctype html>
+<html lang='en'>
+  <head>
+    <meta charset='utf-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1' />
+    <link rel='icon' type='image/svg+xml' href='/favicon.svg' />
+    <meta name='generator' content={Astro.generator} />
+
+    <title>{title}</title>
+    <meta name='title' content={title} />
+    <meta name='description' content={description} />
+    <meta name='robots' content={noindex ? 'noindex,nofollow' : 'index,follow'} />
+    <link rel='canonical' href={canonicalURL} />
+
+    <meta property='og:type' content='website' />
+    <meta property='og:url' content={canonicalURL} />
+    <meta property='og:title' content={title} />
+    <meta property='og:description' content={description} />
+    <meta property='og:site_name' content='MFJ Tools' />
+    <meta property='og:locale' content='en_US' />
+
+    <meta property='twitter:card' content='summary_large_image' />
+    <meta property='twitter:url' content={canonicalURL} />
+    <meta property='twitter:title' content={title} />
+    <meta property='twitter:description' content={description} />
+
+    <script type='application/ld+json' set:html={JSON.stringify(websiteSchema)} />
+    <script type='application/ld+json' set:html={JSON.stringify(organizationSchema)} />
+
+    <ClientRouter />
+  </head>
+  <body class='bg-gray-50 text-gray-800 min-h-screen flex flex-col'>
+    <header class='bg-white shadow' role='banner'>
+      <div class='max-w-5xl mx-auto px-4 py-4 flex items-center justify-between'>
+        <a href='/' class='text-xl font-bold text-blue-700'>MFJ Tools</a>
+        <nav aria-label='Main navigation' class='space-x-4 text-sm'>
+          <a href='/' class='hover:underline'>Calculators</a>
+          <a href='/articles/' class='hover:underline'>Guides</a>
+          <a href='/about/' class='hover:underline'>About</a>
+          <a href='/contact/' class='hover:underline'>Contact</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id='main-content' class='max-w-5xl mx-auto px-4 py-8 flex-grow w-full' role='main'>
+      <slot />
+    </main>
+
+    <footer class='mt-16 border-t border-gray-200 pt-8 pb-6 text-sm text-gray-600'>
+      <div class='max-w-5xl mx-auto px-4 text-center space-y-3'>
+        <div class='space-x-4'>
+          <a href='/about/' class='hover:underline'>About</a>
+          <a href='/methodology/' class='hover:underline'>Methodology</a>
+          <a href='/contact/' class='hover:underline'>Contact</a>
+          <a href='/privacy-policy/' class='hover:underline'>Privacy Policy</a>
+          <a href='/terms-of-service/' class='hover:underline'>Terms</a>
+          <a href='/disclaimer/' class='hover:underline'>Disclaimer</a>
+        </div>
+        <p>
+          &copy; {new Date().getFullYear()} mfjtools.com — Information only, not tax advice.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

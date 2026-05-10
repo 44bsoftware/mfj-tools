@@ -1,0 +1,427 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import { TAX_YEARS, SUPPORTED_YEARS } from '../../data/tax-years'
+
+export function getStaticPaths() {
+  return SUPPORTED_YEARS.map((year) => ({ params: { year } }))
+}
+
+const { year } = Astro.params
+const data = TAX_YEARS[year!]
+if (!data) throw new Error(`Unsupported year: ${year}`)
+
+const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+const stdMfj = fmt.format(data.standardDeduction.mfj)
+const ctcAmount = fmt.format(data.ctc.perChild)
+const ctcPhaseout = fmt.format(data.ctc.phaseoutStart.mfj)
+const ltcg0Top = fmt.format(data.ltcgBrackets.mfj[0].upTo)
+const ltcg15Top = fmt.format(data.ltcgBrackets.mfj[1].upTo)
+const mfj22Top = fmt.format(data.brackets.mfj[2].upTo) // top of 22% bracket
+const mfj22Bottom = fmt.format(data.brackets.mfj[1].upTo) // bottom of 22% bracket = top of 12%
+
+const faqs = [
+  {
+    q: 'What is this calculator estimating exactly?',
+    a: `Your total federal income tax liability for the ${year} tax year, filing as Married Filing Jointly. It applies the ${year} MFJ brackets to ordinary income, stacks long-term capital gains and qualified dividends on top at the preferential 0%/15%/20% rates, and subtracts the Child Tax Credit. If you provide your year-to-date federal withholding, it also estimates whether you will get a refund or owe a balance.`,
+  },
+  {
+    q: 'Why do long-term capital gains and qualified dividends use different brackets?',
+    a: `Long-term capital gains (assets held more than a year) and qualified dividends are taxed at preferential rates — 0%, 15%, or 20% — instead of ordinary income rates. They "stack" on top of your ordinary taxable income: ordinary income fills the lower LTCG brackets first, then your gains and qualified dividends fall into whichever LTCG brackets remain. For ${year} MFJ, the 0% rate covers total taxable income up to ${ltcg0Top} and the 15% rate covers up to ${ltcg15Top}.`,
+  },
+  {
+    q: 'Should I enter pre-tax 401(k) contributions in the wages field or the contributions field?',
+    a: `Use the wages field for your gross wages (before any pre-tax deductions). Then enter your annual 401(k), traditional IRA (if deductible), HSA, and similar pre-tax contributions in the dedicated field. The calculator subtracts them to compute AGI. If your W-2 box 1 already excludes these, you can enter the box 1 amount as wages and leave the contributions field blank — but be careful not to double-count.`,
+  },
+  {
+    q: 'How accurate is this for tax planning?',
+    a: `For a wage-earning couple with straightforward investment income, the result should be within a couple hundred dollars of your actual return. Accuracy degrades for: self-employment income, rental income, pass-through business income with QBI deduction, large itemized deductions with phaseouts, AMT-triggering situations, and households subject to the Net Investment Income Tax or Additional Medicare Tax. Use this as a starting point, not a substitute for tax software or a CPA.`,
+  },
+  {
+    q: 'Why does the marginal rate shown differ from what I expected?',
+    a: `The "marginal rate" is the rate that would apply to your next dollar of ordinary income — it is determined by where your taxable income lands in the bracket structure, not by your total income. Couples are often surprised that a $200,000 combined-income household sits in the 22% bracket (after the standard deduction takes them well below the top of the ${mfj22Bottom}–${mfj22Top} ${year} 22% range).`,
+  },
+]
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+}
+---
+
+<Layout
+  title={`Combined Income Tax Estimator for Married Couples (${year}) — MFJ Tools`}
+  description={`Free ${year} federal tax estimator for couples filing jointly. Enter wages, investment income, retirement contributions, and deductions to see your estimated tax owed and refund or balance due.`}
+>
+  <script type='application/ld+json' set:html={JSON.stringify(faqSchema)} is:inline />
+
+  <nav class='text-sm text-gray-600 mb-4' aria-label='Breadcrumb'>
+    <a href='/' class='hover:underline'>Calculators</a>
+    <span class='mx-2'>/</span>
+    <span>Combined Income Tax Estimator ({year})</span>
+  </nav>
+
+  <header class='mb-6'>
+    <h1 class='text-3xl md:text-4xl font-bold mb-3'>Combined Income Tax Estimator ({year})</h1>
+    <p class='text-lg text-gray-700'>
+      Estimate your {year} federal income tax as a married couple filing jointly. Enter your wages
+      and add investment income, retirement contributions, and deductions to refine the result.
+    </p>
+  </header>
+
+  <div class='mb-6 flex items-center gap-2 text-sm'>
+    <span class='text-gray-600'>Tax year:</span>
+    {SUPPORTED_YEARS.map((y) => (
+      <a
+        href={`/joint-tax-estimator/${y}/`}
+        class:list={[
+          'px-3 py-1 rounded border',
+          y === year
+            ? 'bg-blue-600 text-white border-blue-600 font-medium'
+            : 'bg-white text-blue-700 border-gray-300 hover:border-blue-400',
+        ]}
+        aria-current={y === year ? 'page' : undefined}
+      >
+        {y}
+      </a>
+    ))}
+  </div>
+
+  <section class='grid gap-6 md:grid-cols-2'>
+    <form id='estimator-form' class='bg-white rounded-lg border border-gray-200 p-6 space-y-5' novalidate>
+      <h2 class='text-xl font-semibold text-blue-700'>Required</h2>
+
+      <div>
+        <label for='wages' class='block text-sm font-medium mb-1'>Combined wages</label>
+        <div class='relative'>
+          <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+          <input id='wages' type='number' inputmode='decimal' min='0' step='1000' placeholder='200000'
+            class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+        </div>
+        <p class='text-xs text-gray-500 mt-1'>Both spouses combined, before pre-tax deductions.</p>
+      </div>
+
+      <div>
+        <label for='kids' class='block text-sm font-medium mb-1'>
+          Qualifying children under 17 <span class='text-gray-600 font-normal'>(for Child Tax Credit)</span>
+        </label>
+        <input id='kids' type='number' inputmode='numeric' min='0' max='10' step='1' placeholder='0'
+          class='w-32 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+      </div>
+
+      <details class='border-t border-gray-200 pt-5'>
+        <summary class='cursor-pointer text-xl font-semibold text-blue-700 mb-3'>
+          More inputs (optional)
+        </summary>
+
+        <div class='space-y-4 mt-4'>
+          <div>
+            <label for='ordinary' class='block text-sm font-medium mb-1'>Other ordinary income</label>
+            <div class='relative'>
+              <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+              <input id='ordinary' type='number' inputmode='decimal' min='0' step='100' placeholder='0'
+                class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+            </div>
+            <p class='text-xs text-gray-500 mt-1'>Interest, ordinary (non-qualified) dividends, short-term capital gains, taxable retirement distributions.</p>
+          </div>
+
+          <div>
+            <label for='ltcg' class='block text-sm font-medium mb-1'>Long-term capital gains + qualified dividends</label>
+            <div class='relative'>
+              <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+              <input id='ltcg' type='number' inputmode='decimal' min='0' step='100' placeholder='0'
+                class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+            </div>
+            <p class='text-xs text-gray-500 mt-1'>Taxed at the preferential 0%/15%/20% rates depending on total taxable income.</p>
+          </div>
+
+          <div>
+            <label for='pretax' class='block text-sm font-medium mb-1'>Pre-tax retirement and HSA contributions</label>
+            <div class='relative'>
+              <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+              <input id='pretax' type='number' inputmode='decimal' min='0' step='100' placeholder='0'
+                class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+            </div>
+            <p class='text-xs text-gray-500 mt-1'>Combined annual 401(k), traditional IRA (if deductible), 403(b), HSA contributions. Skip if your wages above already exclude them.</p>
+          </div>
+
+          <div>
+            <label for='itemized' class='block text-sm font-medium mb-1'>
+              Itemized deductions <span class='text-gray-600 font-normal'>(if more than {stdMfj})</span>
+            </label>
+            <div class='relative'>
+              <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+              <input id='itemized' type='number' inputmode='decimal' min='0' step='100' placeholder='0'
+                class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+            </div>
+            <p class='text-xs text-gray-500 mt-1'>
+              Total of mortgage interest, SALT (capped at $10,000), charitable, deductible medical above the 7.5% AGI floor. Leave blank to use the {stdMfj} standard deduction.
+            </p>
+          </div>
+
+          <div>
+            <label for='withheld' class='block text-sm font-medium mb-1'>Federal tax withheld year-to-date</label>
+            <div class='relative'>
+              <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+              <input id='withheld' type='number' inputmode='decimal' min='0' step='100' placeholder='0'
+                class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+            </div>
+            <p class='text-xs text-gray-500 mt-1'>From your most recent pay stubs. Adding this lets the calculator estimate your refund or balance due.</p>
+          </div>
+        </div>
+      </details>
+    </form>
+
+    <aside id='estimator-results' class='bg-blue-50 border border-blue-200 rounded-lg p-6 space-y-4' aria-live='polite'>
+      <h2 class='text-xl font-semibold text-blue-900'>Estimate</h2>
+      <p id='result-empty' class='text-gray-600'>
+        Enter your combined wages to estimate your {year} federal tax.
+      </p>
+
+      <div id='result-detail' class='hidden space-y-4'>
+        <div class='bg-white rounded p-4 border border-blue-300'>
+          <p class='text-sm text-gray-600 mb-1'>Estimated federal tax owed</p>
+          <p class='text-3xl font-bold text-blue-700' id='total-tax'>—</p>
+          <p class='text-sm text-gray-600 mt-1'>
+            <span id='effective-rate'></span> effective rate · <span id='marginal-rate'></span> marginal rate
+          </p>
+        </div>
+
+        <div id='refund-box' class='hidden bg-white rounded p-4 border-2'>
+          <p class='text-sm text-gray-600 mb-1' id='refund-label'></p>
+          <p class='text-2xl font-bold' id='refund-amount'></p>
+          <p class='text-xs text-gray-500 mt-1' id='refund-detail'></p>
+        </div>
+
+        <details class='text-sm'>
+          <summary class='cursor-pointer font-medium text-blue-800'>See the math</summary>
+          <dl class='mt-3 space-y-1 text-gray-700'>
+            <div class='flex justify-between'><dt>Wages</dt><dd id='math-wages' class='font-mono'>—</dd></div>
+            <div class='flex justify-between'><dt>Other ordinary income</dt><dd id='math-ordinary' class='font-mono'>—</dd></div>
+            <div class='flex justify-between'><dt>Long-term cap gains + qual. div.</dt><dd id='math-ltcg' class='font-mono'>—</dd></div>
+            <div class='flex justify-between'><dt>Pre-tax contributions</dt><dd id='math-pretax' class='font-mono'>—</dd></div>
+            <div class='flex justify-between font-semibold border-t border-blue-200 pt-1'><dt>AGI</dt><dd id='math-agi' class='font-mono'>—</dd></div>
+            <div class='flex justify-between'><dt id='math-deduction-label'>Standard deduction</dt><dd id='math-deduction' class='font-mono'>—</dd></div>
+            <div class='flex justify-between font-semibold'><dt>Taxable income</dt><dd id='math-taxable' class='font-mono'>—</dd></div>
+            <div class='flex justify-between'><dt>Tax on ordinary income</dt><dd id='math-ord-tax' class='font-mono'>—</dd></div>
+            <div class='flex justify-between'><dt>Tax on LTCG / qual. div.</dt><dd id='math-ltcg-tax' class='font-mono'>—</dd></div>
+            <div class='flex justify-between'><dt>Child Tax Credit</dt><dd id='math-ctc' class='font-mono'>—</dd></div>
+            <div class='flex justify-between font-semibold border-t border-blue-200 pt-1'><dt>Total federal tax</dt><dd id='math-total' class='font-mono'>—</dd></div>
+          </dl>
+        </details>
+      </div>
+    </aside>
+  </section>
+
+  <section class='mt-12 article-content'>
+    <h2>How this calculator works</h2>
+    <p>
+      The estimator computes your AGI as wages + other ordinary income + LTCG/qualified dividends − pre-tax contributions.
+      It then subtracts either the {stdMfj} MFJ standard deduction or your itemized deductions (whichever is larger) to get
+      taxable income.
+    </p>
+    <p>
+      Tax is computed in two layers. First, ordinary taxable income (everything except LTCG and qualified dividends)
+      runs through the {year} MFJ ordinary brackets. Second, LTCG and qualified dividends are stacked on top of ordinary
+      taxable income — the LTCG bracket thresholds ($0–{ltcg0Top} at 0%, {ltcg0Top}–{ltcg15Top} at 15%, {ltcg15Top}+ at 20%) are
+      based on total taxable income, not LTCG alone, so ordinary income "uses up" some of the lower LTCG brackets first.
+    </p>
+    <p>
+      Finally, the Child Tax Credit ({ctcAmount} per qualifying child, phased out by $50 per $1,000 above {ctcPhaseout} AGI)
+      is subtracted, capped at the total tax owed.
+    </p>
+
+    <h2>What's not included</h2>
+    <ul class='list-disc'>
+      <li><strong>Net Investment Income Tax (3.8%)</strong> on investment income above $250,000 AGI</li>
+      <li><strong>Additional Medicare Tax (0.9%)</strong> on wages above $250,000</li>
+      <li><strong>Self-employment tax</strong> (15.3% on SE income up to the Social Security wage base)</li>
+      <li><strong>Qualified Business Income (QBI) deduction</strong> for pass-through business income</li>
+      <li><strong>Alternative Minimum Tax (AMT)</strong></li>
+      <li><strong>Education credits</strong> (American Opportunity, Lifetime Learning)</li>
+      <li><strong>Saver's Credit, EITC, Premium Tax Credit, Adoption Credit, etc.</strong></li>
+      <li><strong>State and local income taxes</strong></li>
+      <li><strong>FICA</strong> (Social Security + Medicare withholding) — these are payroll taxes, not income tax, and are separate from what this calculator estimates</li>
+    </ul>
+
+    <h2>Frequently asked questions</h2>
+    {faqs.map((f) => (
+      <div class='mt-4'>
+        <h3 class='text-lg font-semibold'>{f.q}</h3>
+        <p>{f.a}</p>
+      </div>
+    ))}
+  </section>
+
+  <section class='mt-12 text-sm text-gray-600'>
+    <h2 class='text-base font-semibold mb-2 text-gray-900'>Data sources for {year}</h2>
+    <ul class='list-disc ml-5 space-y-1'>
+      {data.sources.map((s) => (
+        <li>
+          <a href={s.url} class='text-blue-600 hover:underline' target='_blank' rel='noopener'>{s.label}</a>
+          {s.note && <span class='text-gray-500'> — {s.note}</span>}
+        </li>
+      ))}
+    </ul>
+    <p class='mt-2'>
+      See the <a href='/methodology/' class='text-blue-600 hover:underline'>full methodology</a> for calculation details and assumptions.
+    </p>
+  </section>
+
+  <section class='mt-12 p-6 bg-yellow-50 border-l-4 border-yellow-400 rounded text-sm text-gray-700'>
+    <strong>Disclaimer:</strong> This calculator provides a simplified federal tax estimate for informational purposes only.
+    It is not tax advice. Real-world tax liability depends on items not modeled here. Consult a CPA or enrolled agent
+    before making decisions based on this output.
+  </section>
+</Layout>
+
+<script is:inline define:vars={{ taxData: data }}>
+  const BRACKETS_MFJ = taxData.brackets.mfj;
+  const LTCG_MFJ = taxData.ltcgBrackets.mfj;
+  const STD_MFJ = taxData.standardDeduction.mfj;
+  const CTC_PER_CHILD = taxData.ctc.perChild;
+  const CTC_PHASEOUT_MFJ = taxData.ctc.phaseoutStart.mfj;
+
+  function ordinaryTax(taxable) {
+    if (taxable <= 0) return 0;
+    let total = 0, prev = 0;
+    for (const b of BRACKETS_MFJ) {
+      if (taxable <= b.upTo) return total + (taxable - prev) * b.rate;
+      total += (b.upTo - prev) * b.rate;
+      prev = b.upTo;
+    }
+    return total;
+  }
+
+  function marginalRate(taxable) {
+    if (taxable <= 0) return 0;
+    for (const b of BRACKETS_MFJ) {
+      if (taxable <= b.upTo) return b.rate;
+    }
+    return BRACKETS_MFJ[BRACKETS_MFJ.length - 1].rate;
+  }
+
+  function ltcgTax(ordinaryTaxable, ltcgAmount) {
+    if (ltcgAmount <= 0) return 0;
+    let tax = 0;
+    let positionInTotal = Math.max(0, ordinaryTaxable);
+    let remaining = ltcgAmount;
+    for (const b of LTCG_MFJ) {
+      if (positionInTotal >= b.upTo) continue;
+      const slice = Math.min(remaining, b.upTo - positionInTotal);
+      tax += slice * b.rate;
+      remaining -= slice;
+      positionInTotal += slice;
+      if (remaining <= 0) return tax;
+    }
+    return tax;
+  }
+
+  function ctc(kids, agi) {
+    if (kids <= 0) return 0;
+    const full = kids * CTC_PER_CHILD;
+    if (agi <= CTC_PHASEOUT_MFJ) return full;
+    const reduction = Math.ceil((agi - CTC_PHASEOUT_MFJ) / 1000) * 50;
+    return Math.max(0, full - reduction);
+  }
+
+  function num(id) {
+    const v = parseFloat(document.getElementById(id).value);
+    return Number.isFinite(v) && v >= 0 ? v : 0;
+  }
+
+  const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  const pct = (r) => `${(r * 100).toFixed(1)}%`;
+
+  function init() {
+    const form = document.getElementById('estimator-form');
+    if (!form) return;
+
+    const empty = document.getElementById('result-empty');
+    const detail = document.getElementById('result-detail');
+    const refundBox = document.getElementById('refund-box');
+
+    function recompute() {
+      const wages = num('wages');
+      const ordinary = num('ordinary');
+      const ltcg = num('ltcg');
+      const pretax = num('pretax');
+      const itemized = num('itemized');
+      const withheld = num('withheld');
+      const kids = Math.max(0, Math.floor(num('kids')));
+
+      if (wages + ordinary + ltcg <= 0) {
+        empty.classList.remove('hidden');
+        detail.classList.add('hidden');
+        return;
+      }
+
+      const grossIncome = wages + ordinary + ltcg;
+      const agi = Math.max(0, grossIncome - pretax);
+      const usingItemized = itemized > STD_MFJ;
+      const deduction = usingItemized ? itemized : STD_MFJ;
+      const totalTaxable = Math.max(0, agi - deduction);
+      const ordinaryAGI = Math.max(0, wages + ordinary - pretax);
+      const ordinaryPortion = Math.max(0, Math.min(totalTaxable, ordinaryAGI - deduction));
+      const ltcgPortion = totalTaxable - ordinaryPortion;
+
+      const ordTax = ordinaryTax(ordinaryPortion);
+      const ltcgTaxAmt = ltcgTax(ordinaryPortion, ltcgPortion);
+      const preCredit = ordTax + ltcgTaxAmt;
+      const credit = Math.min(preCredit, ctc(kids, agi));
+      const total = preCredit - credit;
+
+      empty.classList.add('hidden');
+      detail.classList.remove('hidden');
+
+      document.getElementById('total-tax').textContent = fmt.format(total);
+      const effective = grossIncome > 0 ? total / grossIncome : 0;
+      document.getElementById('effective-rate').textContent = pct(effective);
+      document.getElementById('marginal-rate').textContent = pct(marginalRate(ordinaryPortion));
+
+      document.getElementById('math-wages').textContent = fmt.format(wages);
+      document.getElementById('math-ordinary').textContent = fmt.format(ordinary);
+      document.getElementById('math-ltcg').textContent = fmt.format(ltcg);
+      document.getElementById('math-pretax').textContent = fmt.format(-pretax);
+      document.getElementById('math-agi').textContent = fmt.format(agi);
+      document.getElementById('math-deduction-label').textContent = usingItemized ? 'Itemized deductions' : 'Standard deduction';
+      document.getElementById('math-deduction').textContent = fmt.format(-deduction);
+      document.getElementById('math-taxable').textContent = fmt.format(totalTaxable);
+      document.getElementById('math-ord-tax').textContent = fmt.format(ordTax);
+      document.getElementById('math-ltcg-tax').textContent = fmt.format(ltcgTaxAmt);
+      document.getElementById('math-ctc').textContent = fmt.format(-credit);
+      document.getElementById('math-total').textContent = fmt.format(total);
+
+      if (withheld > 0) {
+        const diff = withheld - total;
+        refundBox.classList.remove('hidden');
+        const label = document.getElementById('refund-label');
+        const amount = document.getElementById('refund-amount');
+        const det = document.getElementById('refund-detail');
+        if (diff >= 0) {
+          refundBox.className = 'bg-white rounded p-4 border-2 border-green-500';
+          label.textContent = 'Estimated refund';
+          amount.textContent = fmt.format(diff);
+          amount.className = 'text-2xl font-bold text-green-700';
+          det.textContent = `Withheld ${fmt.format(withheld)} − tax owed ${fmt.format(total)}.`;
+        } else {
+          refundBox.className = 'bg-white rounded p-4 border-2 border-red-500';
+          label.textContent = 'Estimated balance due';
+          amount.textContent = fmt.format(-diff);
+          amount.className = 'text-2xl font-bold text-red-700';
+          det.textContent = `Tax owed ${fmt.format(total)} − withheld ${fmt.format(withheld)}. Consider increasing withholding for the rest of the year.`;
+        }
+      } else {
+        refundBox.classList.add('hidden');
+      }
+    }
+
+    form.addEventListener('input', recompute);
+  }
+
+  document.addEventListener('astro:page-load', init);
+</script>

@@ -1,0 +1,11 @@
+# Cloudflare Pages redirects.
+# Year-less canonical URLs 301 to the current tax year. Update these when
+# CURRENT_TAX_YEAR in src/data/tax-years.ts flips (typically January 1).
+
+/w4-calculator/         /w4-calculator/2026/         301
+/mfj-vs-mfs/            /mfj-vs-mfs/2026/            301
+/marriage-penalty/      /marriage-penalty/2026/      301
+/joint-tax-estimator/   /joint-tax-estimator/2026/   301
+
+# Domain-level redirect: mfjcalculator.com → mfjtools.com (configured at the
+# Cloudflare Pages project / DNS layer, not here).

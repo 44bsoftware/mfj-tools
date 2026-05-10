@@ -1,0 +1,202 @@
+---
+import Layout from '../layouts/Layout.astro'
+import { TAX_YEARS, SUPPORTED_YEARS } from '../data/tax-years'
+
+// Collect every unique source across all years for the "all sources" bibliography.
+const seen = new Set<string>()
+const allSources: Array<{ year: number; label: string; url: string; note?: string }> = []
+for (const yKey of SUPPORTED_YEARS) {
+  const y = TAX_YEARS[yKey]
+  for (const s of y.sources) {
+    const key = s.url
+    if (seen.has(key)) continue
+    seen.add(key)
+    allSources.push({ year: y.year, ...s })
+  }
+}
+---
+
+<Layout
+  title='Methodology and Sources — MFJ Tools'
+  description={"How the MFJ Tools calculators work, what they include and exclude, and the IRS sources behind every bracket and deduction."}
+>
+  <nav class='text-sm text-gray-600 mb-4' aria-label='Breadcrumb'>
+    <a href='/' class='hover:underline'>Calculators</a>
+    <span class='mx-2'>/</span>
+    <span>Methodology</span>
+  </nav>
+
+  <article class='article-content'>
+    <h1 class='text-3xl md:text-4xl font-bold mb-4'>Methodology and Sources</h1>
+
+    <p>
+      Every calculator on MFJ Tools applies the same set of IRS-published tax tables and formulas to the
+      inputs you provide. This page explains what each calculator does, what assumptions it makes, and where
+      the underlying numbers come from. If you want to verify any single bracket or deduction yourself, the
+      bibliography at the bottom links directly to the IRS Revenue Procedure that publishes it.
+    </p>
+
+    <h2>How federal tax is computed</h2>
+    <p>
+      All four calculators share the same core calculation, just applied to different inputs:
+    </p>
+    <ol class='list-decimal'>
+      <li><strong>Adjusted Gross Income (AGI)</strong> = wages + other ordinary income + long-term capital gains + qualified dividends − pre-tax retirement and HSA contributions.</li>
+      <li><strong>Taxable income</strong> = AGI − the larger of the standard deduction or itemized deductions.</li>
+      <li><strong>Tax on ordinary income</strong> applies the bracket table to the ordinary portion of taxable income (everything except long-term capital gains and qualified dividends).</li>
+      <li><strong>Tax on preferential-rate income</strong> stacks long-term capital gains and qualified dividends on top of ordinary taxable income, using the 0%/15%/20% LTCG brackets keyed off total taxable income.</li>
+      <li><strong>Credits</strong> (currently just the Child Tax Credit) are subtracted from total tax owed, capped at the tax owed (we treat the CTC as nonrefundable for comparison purposes).</li>
+    </ol>
+    <p>
+      Brackets are applied marginally — each slice of taxable income is taxed at the rate that applies to that
+      slice, not your highest rate.
+    </p>
+
+    <h2>Per-calculator assumptions</h2>
+
+    <h3>Two-Earner W-4 Withholding Calculator</h3>
+    <p>
+      Computes the gap between (a) your household's actual joint federal tax liability on combined wages and
+      (b) what each employer would withhold by default if both spouses' W-4s say "Married filing jointly" with
+      nothing else filled in. The shortfall divided by remaining pay periods is the per-paycheck amount you
+      should add to Step 4(c) of the higher earner's W-4.
+    </p>
+    <p>
+      <strong>Includes:</strong> wages, MFJ standard deduction, MFJ tax brackets.
+      <strong>Does not include:</strong> non-wage income, bonuses, itemized deductions, tax credits,
+      pre-tax 401(k)/HSA contributions (enter your post-deduction wages if you contribute heavily), state
+      withholding.
+    </p>
+
+    <h3>MFJ vs MFS Comparison</h3>
+    <p>
+      Computes total federal tax under Married Filing Jointly (one return) versus Married Filing Separately
+      (two returns summed) and recommends the cheaper one. For each filing status, the calculator picks the
+      deduction approach (standard or itemized) that produces the lower tax — with the MFS-specific constraint
+      that if either spouse itemizes, the other cannot take the standard deduction. The 7.5%-of-AGI medical
+      floor is applied against joint AGI on MFJ and against each spouse's individual AGI on MFS, which is the
+      mechanism behind the classic medical-driven MFS scenarios.
+    </p>
+    <p>
+      The Child Tax Credit on the MFS side is assumed to be claimed by the higher-earning spouse, since the
+      CTC is limited by tax owed and that spouse usually has more tax to offset.
+    </p>
+    <p>
+      <strong>Includes:</strong> wages, medical expenses, other itemized deductions, CTC, MFJ + MFS
+      brackets and standard deductions.
+      <strong>Does not include:</strong> EITC, education credits, Child & Dependent Care Credit, student
+      loan interest deduction, IRA deduction phaseouts, Premium Tax Credit, AMT, NIIT, community property
+      income allocation, state taxes.
+    </p>
+
+    <h3>Marriage Tax Penalty / Bonus</h3>
+    <p>
+      Computes federal tax under two hypotheticals and shows the delta. The "two singles" side runs each spouse
+      through the Single brackets and standard deduction. The "filing jointly" side runs the same household
+      through the MFJ brackets and standard deduction. A positive delta is a marriage penalty (MFJ costs more);
+      a negative delta is a marriage bonus.
+    </p>
+    <p>
+      All qualifying children are assumed to be claimed by the higher-earning spouse on the singles side, since
+      that maximizes CTC use under the per-spouse $200,000 single-filer phaseout.
+    </p>
+    <p>
+      <strong>Includes:</strong> wages, kids (CTC), Single + MFJ brackets and standard deductions.
+      <strong>Does not include:</strong> Net Investment Income Tax, Additional Medicare Tax, SALT $10,000 cap,
+      capital gains rate brackets, itemized deductions, EITC, retirement contribution phaseouts, state taxes.
+      Several of these are real sources of marriage penalty for moderate-to-high earners that this calculator
+      does not capture — see the calculator page for details.
+    </p>
+
+    <h3>Combined Income Tax Estimator</h3>
+    <p>
+      The most general-purpose of the four. Computes total federal tax for an MFJ household with optional
+      inputs for non-wage ordinary income, long-term capital gains and qualified dividends, pre-tax retirement
+      contributions, itemized deductions, and year-to-date federal withholding. Long-term gains and qualified
+      dividends are stacked on top of ordinary taxable income for the 0%/15%/20% bracket math. If withholding
+      is provided, the calculator estimates whether you'll owe a balance or get a refund.
+    </p>
+    <p>
+      <strong>Includes:</strong> wages, ordinary investment income, long-term capital gains, qualified
+      dividends, pre-tax contributions, itemized deductions, CTC, MFJ ordinary brackets, MFJ LTCG brackets.
+      <strong>Does not include:</strong> NIIT, Additional Medicare Tax, self-employment tax, QBI deduction,
+      AMT, education credits, EITC, Premium Tax Credit, FICA payroll tax, state taxes.
+    </p>
+
+    <h2>What we deliberately leave out</h2>
+    <p>
+      Most omissions are by design. We chose to keep each calculator scoped to a specific question rather than
+      build one mega-tool that captures every edge case. The IRS Tax Withholding Estimator and full-blown tax
+      software (TurboTax, FreeTaxUSA, a CPA) handle the long tail. Our goal is to give a fast, transparent
+      answer for the ~80% of married-couple situations where the math is straightforward, and to be explicit
+      about when to seek a more thorough tool.
+    </p>
+
+    <h2>Sources</h2>
+    <p>
+      Every bracket, deduction, credit, and phaseout is sourced from official IRS publications. The most
+      important is the annual Revenue Procedure that publishes inflation-adjusted figures (typically
+      released in late October for the following tax year). When Congress passes mid-year tax legislation
+      (like the One Big Beautiful Bill Act in 2025), we cite the IRS guidance that amends the Rev. Proc.
+      figures.
+    </p>
+
+    <h3>Primary sources by tax year</h3>
+    <ul class='list-disc'>
+      {SUPPORTED_YEARS.map((yKey) => {
+        const y = TAX_YEARS[yKey]
+        return (
+          <li>
+            <strong>Tax year {y.year}:</strong>
+            <ul class='list-disc ml-6 mt-1'>
+              {y.sources.map((s) => (
+                <li>
+                  <a href={s.url} class='text-blue-600 hover:underline' target='_blank' rel='noopener'>{s.label}</a>
+                  {s.note && <span class='text-gray-600'> — {s.note}</span>}
+                </li>
+              ))}
+            </ul>
+          </li>
+        )
+      })}
+    </ul>
+
+    <h3>Secondary references</h3>
+    <p>
+      Useful third-party sources that consolidate or explain the IRS data, particularly for the Married Filing
+      Separately bracket table (which the IRS Rev. Proc. publishes in technical form):
+    </p>
+    <ul class='list-disc'>
+      <li>
+        <a href='https://taxfoundation.org/data/all/federal/2025-tax-brackets/' class='text-blue-600 hover:underline' target='_blank' rel='noopener'>Tax Foundation — 2025 Tax Brackets and Federal Income Tax Rates</a>
+      </li>
+      <li>
+        <a href='https://taxfoundation.org/data/all/federal/2026-tax-brackets/' class='text-blue-600 hover:underline' target='_blank' rel='noopener'>Tax Foundation — 2026 Tax Brackets and Federal Income Tax Rates</a>
+      </li>
+      <li>
+        <a href='https://www.fidelity.com/learning-center/personal-finance/tax-brackets' class='text-blue-600 hover:underline' target='_blank' rel='noopener'>Fidelity — 2025 and 2026 tax brackets and federal income tax rates</a>
+        <span class='text-gray-600'> — includes the Married Filing Separately bracket table.</span>
+      </li>
+      <li>
+        <a href='https://www.irs.gov/individuals/tax-withholding-estimator' class='text-blue-600 hover:underline' target='_blank' rel='noopener'>IRS Tax Withholding Estimator</a>
+        <span class='text-gray-600'> — the official IRS tool for the more comprehensive case our W-4 calculator does not handle.</span>
+      </li>
+    </ul>
+
+    <h2>Updates</h2>
+    <p>
+      The supported years above ({SUPPORTED_YEARS.join(', ')}) are pinned at build time. When the IRS publishes
+      the next year's Revenue Procedure (typically the October before the year begins), we add it as a new
+      year while keeping the prior years available at their year-pinned URLs. If a tax-law change retroactively
+      affects an earlier year — as the OBBBA did to 2025 — we update that year's data and note the change in
+      the source list above.
+    </p>
+
+    <h2>Found an error?</h2>
+    <p>
+      If you spot a number that doesn't match the IRS source linked above, please email
+      <a href='mailto:44bsoftware@gmail.com' class='text-blue-600 hover:underline'>44bsoftware@gmail.com</a>
+      with the URL and the discrepancy. Tax data corrections take priority.
+    </p>
+  </article>
+</Layout>

@@ -1,0 +1,384 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import { TAX_YEARS, SUPPORTED_YEARS } from '../../data/tax-years'
+
+export function getStaticPaths() {
+  return SUPPORTED_YEARS.map((year) => ({ params: { year } }))
+}
+
+const { year } = Astro.params
+const data = TAX_YEARS[year!]
+if (!data) throw new Error(`Unsupported year: ${year}`)
+
+const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+const stdMfj = fmt.format(data.standardDeduction.mfj)
+const stdSingle = fmt.format(data.standardDeduction.single)
+const ctcPhaseoutSingle = fmt.format(data.ctc.phaseoutStart.single)
+const ctcPhaseoutMfj = fmt.format(data.ctc.phaseoutStart.mfj)
+// Single 20% LTCG threshold not in our data file; descriptive text only references MFJ thresholds.
+
+const faqs = [
+  {
+    q: `What is the "marriage tax penalty"?`,
+    a: `The marriage penalty is the extra federal tax some couples pay because they're married and filing jointly, compared to what they would owe if they each filed as Single. It happens when the joint tax brackets, deduction limits, or credit phaseouts are less than twice the single-filer values, so getting married pushes household income into higher rates faster.`,
+  },
+  {
+    q: `Is the marriage penalty common in ${year}?`,
+    a: `Not from the tax brackets alone. The ${year} MFJ brackets are exactly twice the Single brackets up through the 32% rate, which means a wage-earning couple under roughly $500,000 of combined income usually pays the same as two singles — or less, if their incomes are unequal (the "marriage bonus"). Real marriage penalties show up most often above that income level, or from items outside the brackets: the SALT deduction cap, the Net Investment Income Tax threshold, and the Additional Medicare Tax threshold, all of which are NOT doubled for joint filers.`,
+  },
+  {
+    q: `What is the "marriage bonus"?`,
+    a: `A marriage bonus is the opposite — paying less tax as a couple than you would as two singles. It mostly happens when one spouse earns much more than the other. The lower-earning spouse "fills" the lower brackets that would otherwise sit empty for the higher earner, pulling some income out of higher brackets and into lower ones. A single-earner household ($150K + $0) gets the largest bonus; equal earners ($75K + $75K) get nothing.`,
+  },
+  {
+    q: `Why doesn't this calculator show a marriage penalty for my income?`,
+    a: `For dual-income wage earners under about $500,000 combined, the ${year} federal brackets do not produce a penalty at all — only a wash or a bonus. If you've heard of the marriage penalty hitting your friends, the cause is likely outside this calculator: investment income subject to the 3.8% NIIT (joint threshold $250K, single $200K each = $400K), the SALT $10,000 cap (joint and single each get $10K, so a couple loses $10K of capacity), or capital gains pushing into the 20% rate at a lower combined threshold than two singles would face.`,
+  },
+  {
+    q: `Does this affect whether I should get married?`,
+    a: `For most couples, no — the federal tax difference is small relative to income, and the broader benefits of marriage (health insurance, Social Security survivor benefits, estate transfers, retirement plan rules) usually dwarf it. But for very high earners or couples with significant investment income, the federal tax difference can be meaningful enough to factor into financial planning.`,
+  },
+  {
+    q: 'What about state taxes?',
+    a: `Some states amplify the federal marriage penalty (or bonus) — others ignore filing status entirely. This calculator is federal-only. Check your state's tax structure if you're evaluating the full picture.`,
+  },
+]
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+}
+---
+
+<Layout
+  title={`Marriage Tax Penalty / Bonus Calculator (${year}) — MFJ Tools`}
+  description={`Free calculator that compares what you'd pay in federal tax as two singles vs filing jointly. See whether marriage costs you (penalty) or saves you (bonus) on ${year} federal income tax.`}
+>
+  <script type='application/ld+json' set:html={JSON.stringify(faqSchema)} is:inline />
+
+  <nav class='text-sm text-gray-600 mb-4' aria-label='Breadcrumb'>
+    <a href='/' class='hover:underline'>Calculators</a>
+    <span class='mx-2'>/</span>
+    <span>Marriage Tax Penalty / Bonus ({year})</span>
+  </nav>
+
+  <header class='mb-6'>
+    <h1 class='text-3xl md:text-4xl font-bold mb-3'>Marriage Tax Penalty / Bonus Calculator ({year})</h1>
+    <p class='text-lg text-gray-700'>
+      Does being married help or hurt your federal tax bill? This calculator compares what you'd pay
+      as two singles versus filing jointly, using {year} brackets, standard deductions, and the Child Tax Credit.
+    </p>
+  </header>
+
+  <div class='mb-6 flex items-center gap-2 text-sm'>
+    <span class='text-gray-600'>Tax year:</span>
+    {SUPPORTED_YEARS.map((y) => (
+      <a
+        href={`/marriage-penalty/${y}/`}
+        class:list={[
+          'px-3 py-1 rounded border',
+          y === year
+            ? 'bg-blue-600 text-white border-blue-600 font-medium'
+            : 'bg-white text-blue-700 border-gray-300 hover:border-blue-400',
+        ]}
+        aria-current={y === year ? 'page' : undefined}
+      >
+        {y}
+      </a>
+    ))}
+  </div>
+
+  <section class='grid gap-6 md:grid-cols-2'>
+    <form id='penalty-form' class='bg-white rounded-lg border border-gray-200 p-6 space-y-5' novalidate>
+      <h2 class='text-xl font-semibold text-blue-700'>Wages</h2>
+
+      <div class='grid grid-cols-2 gap-3'>
+        <div>
+          <label for='wages-1' class='block text-sm font-medium mb-1'>Spouse 1 wages</label>
+          <div class='relative'>
+            <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+            <input id='wages-1' type='number' inputmode='decimal' min='0' step='1000' placeholder='150000'
+              class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+          </div>
+        </div>
+        <div>
+          <label for='wages-2' class='block text-sm font-medium mb-1'>Spouse 2 wages</label>
+          <div class='relative'>
+            <span class='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500'>$</span>
+            <input id='wages-2' type='number' inputmode='decimal' min='0' step='1000' placeholder='80000'
+              class='w-full pl-7 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label for='kids' class='block text-sm font-medium mb-1'>
+          Qualifying children under 17 <span class='text-gray-600 font-normal'>(for Child Tax Credit)</span>
+        </label>
+        <input id='kids' type='number' inputmode='numeric' min='0' max='10' step='1' placeholder='0'
+          class='w-32 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400' />
+        <p class='text-xs text-gray-500 mt-1'>
+          For the "as singles" comparison, all children are assumed to be claimed by the higher-earning spouse.
+        </p>
+      </div>
+    </form>
+
+    <aside id='penalty-results' class='bg-blue-50 border border-blue-200 rounded-lg p-6 space-y-4' aria-live='polite'>
+      <h2 class='text-xl font-semibold text-blue-900'>Result</h2>
+      <p id='result-empty' class='text-gray-600'>
+        Enter both spouses' wages to see whether marriage costs or saves you on federal tax.
+      </p>
+
+      <div id='result-detail' class='hidden space-y-4'>
+        <div id='verdict-box' class='bg-white rounded p-4 border-2'>
+          <p class='text-sm text-gray-600 mb-1' id='verdict-label'></p>
+          <p class='text-3xl font-bold' id='verdict-amount'></p>
+          <p class='text-sm text-gray-600 mt-1' id='verdict-detail'></p>
+        </div>
+
+        <div class='grid grid-cols-2 gap-3'>
+          <div class='bg-white rounded p-4 border border-gray-300'>
+            <p class='text-sm font-medium text-gray-600 mb-1'>If both single</p>
+            <p class='text-xl font-bold text-gray-900' id='single-total'>—</p>
+          </div>
+          <div class='bg-white rounded p-4 border border-gray-300'>
+            <p class='text-sm font-medium text-gray-600 mb-1'>Filing jointly</p>
+            <p class='text-xl font-bold text-gray-900' id='mfj-total'>—</p>
+          </div>
+        </div>
+
+        <details class='text-sm'>
+          <summary class='cursor-pointer font-medium text-blue-800'>See the math</summary>
+          <div class='mt-4 space-y-4'>
+            <div>
+              <h3 class='font-semibold text-gray-900 mb-2'>As two singles</h3>
+              <dl class='space-y-1 text-gray-700'>
+                <div class='flex justify-between'><dt>Spouse 1 tax</dt><dd id='single-1-tax' class='font-mono'>—</dd></div>
+                <div class='flex justify-between'><dt>Spouse 2 tax</dt><dd id='single-2-tax' class='font-mono'>—</dd></div>
+                <div class='flex justify-between'><dt>CTC (claimed by higher earner)</dt><dd id='single-ctc' class='font-mono'>—</dd></div>
+                <div class='flex justify-between font-semibold border-t border-blue-200 pt-1'><dt>Combined</dt><dd id='single-detail-total' class='font-mono'>—</dd></div>
+              </dl>
+            </div>
+
+            <div>
+              <h3 class='font-semibold text-gray-900 mb-2'>Filing jointly (MFJ)</h3>
+              <dl class='space-y-1 text-gray-700'>
+                <div class='flex justify-between'><dt>Combined AGI</dt><dd id='mfj-agi' class='font-mono'>—</dd></div>
+                <div class='flex justify-between'><dt>Standard deduction</dt><dd id='mfj-std' class='font-mono'>—</dd></div>
+                <div class='flex justify-between'><dt>Taxable income</dt><dd id='mfj-taxable' class='font-mono'>—</dd></div>
+                <div class='flex justify-between'><dt>Tax before credits</dt><dd id='mfj-pre' class='font-mono'>—</dd></div>
+                <div class='flex justify-between'><dt>Child Tax Credit</dt><dd id='mfj-ctc' class='font-mono'>—</dd></div>
+                <div class='flex justify-between font-semibold border-t border-blue-200 pt-1'><dt>Tax owed</dt><dd id='mfj-detail-total' class='font-mono'>—</dd></div>
+              </dl>
+            </div>
+          </div>
+        </details>
+
+        <p id='result-note' class='text-sm text-gray-700'></p>
+      </div>
+    </aside>
+  </section>
+
+  <section class='mt-12 article-content'>
+    <h2>How this calculator works</h2>
+    <p>
+      The "as two singles" side computes federal tax for each spouse independently using the {year} Single brackets and the
+      {stdSingle} Single standard deduction. The Child Tax Credit is assigned to whichever spouse earns more (subject to the
+      {ctcPhaseoutSingle} single-filer phaseout). The "filing jointly" side computes one return using the {year} MFJ brackets, the
+      {stdMfj} MFJ standard deduction, and the {ctcPhaseoutMfj} MFJ CTC phaseout.
+    </p>
+    <p>
+      The difference between the two totals is your marriage penalty (positive, MFJ costs more) or marriage bonus
+      (negative, MFJ costs less).
+    </p>
+
+    <h2>What's not included</h2>
+    <p>
+      Several real sources of marriage penalty <em>aren't</em> visible in a wages-only calculator. If any of these apply,
+      your true penalty may be larger than what's shown:
+    </p>
+    <ul class='list-disc'>
+      <li><strong>Net Investment Income Tax (3.8%)</strong> — kicks in at $200K AGI for singles ($400K combined) but only $250K for MFJ. Couples with investment income above $250K joint AGI pay extra.</li>
+      <li><strong>Additional Medicare Tax (0.9%)</strong> — same $200K single / $250K joint thresholds as NIIT. A real penalty for high-wage couples.</li>
+      <li><strong>SALT deduction cap ($10,000)</strong> — applies the same to single and joint filers. Two singles get $20,000 of capacity together; an MFJ couple gets only $10,000.</li>
+      <li><strong>Capital gains brackets</strong> — the 20% long-term capital gains rate kicks in at a lower combined threshold for MFJ than two singles would face separately.</li>
+      <li><strong>Itemized deductions</strong> — this calculator uses the standard deduction. Couples whose itemized totals would each exceed {stdSingle} separately may see a different result jointly.</li>
+      <li><strong>Earned Income Tax Credit and other phaseouts</strong> — many credits phase out at thresholds that aren't double for MFJ.</li>
+      <li><strong>Self-employment tax, retirement contributions, HSA limits, IRA phaseouts</strong> — all have their own marriage interactions.</li>
+    </ul>
+
+    <h2>Frequently asked questions</h2>
+    {faqs.map((f) => (
+      <div class='mt-4'>
+        <h3 class='text-lg font-semibold'>{f.q}</h3>
+        <p>{f.a}</p>
+      </div>
+    ))}
+  </section>
+
+  <section class='mt-12 text-sm text-gray-600'>
+    <h2 class='text-base font-semibold mb-2 text-gray-900'>Data sources for {year}</h2>
+    <ul class='list-disc ml-5 space-y-1'>
+      {data.sources.map((s) => (
+        <li>
+          <a href={s.url} class='text-blue-600 hover:underline' target='_blank' rel='noopener'>{s.label}</a>
+          {s.note && <span class='text-gray-500'> — {s.note}</span>}
+        </li>
+      ))}
+    </ul>
+    <p class='mt-2'>
+      See the <a href='/methodology/' class='text-blue-600 hover:underline'>full methodology</a> for calculation details and assumptions.
+    </p>
+  </section>
+
+  <section class='mt-12 p-6 bg-yellow-50 border-l-4 border-yellow-400 rounded text-sm text-gray-700'>
+    <strong>Disclaimer:</strong> This calculator provides a simplified federal tax estimate for informational purposes only.
+    It is not tax advice. Your actual tax liability depends on factors not modeled here, including itemized deductions,
+    investment income, capital gains, state taxes, and credits beyond the Child Tax Credit. Consult a CPA or enrolled
+    agent for advice specific to your situation.
+  </section>
+</Layout>
+
+<script is:inline define:vars={{ taxData: data }}>
+  const BRACKETS_SINGLE = taxData.brackets.single;
+  const BRACKETS_MFJ = taxData.brackets.mfj;
+  const STD_SINGLE = taxData.standardDeduction.single;
+  const STD_MFJ = taxData.standardDeduction.mfj;
+  const CTC_PER_CHILD = taxData.ctc.perChild;
+  const CTC_PHASEOUT_SINGLE = taxData.ctc.phaseoutStart.single;
+  const CTC_PHASEOUT_MFJ = taxData.ctc.phaseoutStart.mfj;
+
+  function tax(taxable, brackets) {
+    if (taxable <= 0) return 0;
+    let total = 0, prev = 0;
+    for (const b of brackets) {
+      if (taxable <= b.upTo) return total + (taxable - prev) * b.rate;
+      total += (b.upTo - prev) * b.rate;
+      prev = b.upTo;
+    }
+    return total;
+  }
+
+  function ctc(kids, agi, phaseoutStart) {
+    if (kids <= 0) return 0;
+    const full = kids * CTC_PER_CHILD;
+    if (agi <= phaseoutStart) return full;
+    const reduction = Math.ceil((agi - phaseoutStart) / 1000) * 50;
+    return Math.max(0, full - reduction);
+  }
+
+  function num(id) {
+    const v = parseFloat(document.getElementById(id).value);
+    return Number.isFinite(v) && v >= 0 ? v : 0;
+  }
+
+  const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+  function computeSingle(wages, kids, isClaimer) {
+    const taxable = Math.max(0, wages - STD_SINGLE);
+    const pre = tax(taxable, BRACKETS_SINGLE);
+    const credit = isClaimer ? Math.min(pre, ctc(kids, wages, CTC_PHASEOUT_SINGLE)) : 0;
+    return { taxable, pre, credit, owed: pre - credit };
+  }
+
+  function computeMFJ(w1, w2, kids) {
+    const agi = w1 + w2;
+    const taxable = Math.max(0, agi - STD_MFJ);
+    const pre = tax(taxable, BRACKETS_MFJ);
+    const credit = Math.min(pre, ctc(kids, agi, CTC_PHASEOUT_MFJ));
+    return { agi, taxable, pre, credit, owed: pre - credit };
+  }
+
+  function init() {
+    const form = document.getElementById('penalty-form');
+    if (!form) return;
+
+    const empty = document.getElementById('result-empty');
+    const detail = document.getElementById('result-detail');
+    const verdictBox = document.getElementById('verdict-box');
+    const verdictLabel = document.getElementById('verdict-label');
+    const verdictAmount = document.getElementById('verdict-amount');
+    const verdictDetail = document.getElementById('verdict-detail');
+    const note = document.getElementById('result-note');
+
+    function recompute() {
+      const w1 = num('wages-1');
+      const w2 = num('wages-2');
+      const kids = Math.max(0, Math.floor(num('kids')));
+
+      if (w1 + w2 <= 0) {
+        empty.classList.remove('hidden');
+        detail.classList.add('hidden');
+        return;
+      }
+
+      const claimer1 = w1 >= w2;
+      const single1 = computeSingle(w1, kids, claimer1);
+      const single2 = computeSingle(w2, kids, !claimer1);
+      const singleTotal = single1.owed + single2.owed;
+      const mfj = computeMFJ(w1, w2, kids);
+      const delta = mfj.owed - singleTotal;
+
+      empty.classList.add('hidden');
+      detail.classList.remove('hidden');
+
+      document.getElementById('single-total').textContent = fmt.format(singleTotal);
+      document.getElementById('mfj-total').textContent = fmt.format(mfj.owed);
+
+      document.getElementById('single-1-tax').textContent = fmt.format(single1.pre);
+      document.getElementById('single-2-tax').textContent = fmt.format(single2.pre);
+      document.getElementById('single-ctc').textContent = fmt.format(-(single1.credit + single2.credit));
+      document.getElementById('single-detail-total').textContent = fmt.format(singleTotal);
+
+      document.getElementById('mfj-agi').textContent = fmt.format(mfj.agi);
+      document.getElementById('mfj-std').textContent = fmt.format(STD_MFJ);
+      document.getElementById('mfj-taxable').textContent = fmt.format(mfj.taxable);
+      document.getElementById('mfj-pre').textContent = fmt.format(mfj.pre);
+      document.getElementById('mfj-ctc').textContent = fmt.format(-mfj.credit);
+      document.getElementById('mfj-detail-total').textContent = fmt.format(mfj.owed);
+
+      const tolerance = 1;
+      if (Math.abs(delta) < tolerance) {
+        verdictBox.className = 'bg-white rounded p-4 border-2 border-gray-400';
+        verdictLabel.textContent = 'No penalty, no bonus';
+        verdictAmount.textContent = '$0';
+        verdictAmount.className = 'text-3xl font-bold text-gray-700';
+        verdictDetail.textContent = 'Filing jointly produces essentially the same federal tax as filing as two singles.';
+      } else if (delta > 0) {
+        verdictBox.className = 'bg-white rounded p-4 border-2 border-red-500';
+        verdictLabel.textContent = 'Marriage penalty';
+        verdictAmount.textContent = `+${fmt.format(delta)}`;
+        verdictAmount.className = 'text-3xl font-bold text-red-700';
+        verdictDetail.textContent = `Filing jointly costs ${fmt.format(delta)} more than filing as two singles would.`;
+      } else {
+        verdictBox.className = 'bg-white rounded p-4 border-2 border-green-500';
+        verdictLabel.textContent = 'Marriage bonus';
+        verdictAmount.textContent = `−${fmt.format(-delta)}`;
+        verdictAmount.className = 'text-3xl font-bold text-green-700';
+        verdictDetail.textContent = `Filing jointly saves you ${fmt.format(-delta)} compared with filing as two singles.`;
+      }
+
+      const notes = [];
+      const ratio = Math.min(w1, w2) / Math.max(w1, w2);
+      if (delta < 0 && ratio < 0.5) {
+        notes.push("Your marriage bonus comes from the income gap between spouses — the lower earner's lower brackets absorb income that would otherwise sit in higher brackets on the higher earner's single return.");
+      }
+      if (delta > 0) {
+        notes.push('At your income level, the federal brackets create a small penalty. If you also have investment income above $250,000 combined AGI, the 3.8% Net Investment Income Tax adds further marriage penalty not shown here.');
+      }
+      if (Math.abs(delta) < 100 && w1 + w2 < 500000) {
+        notes.push('Most dual-income couples under ~$500,000 combined wages see a small bonus or near-zero result on federal brackets — the more significant marriage tax effects in this income range come from the SALT $10,000 cap and credit phaseouts not modeled here.');
+      }
+      note.textContent = notes.join(' ');
+    }
+
+    form.addEventListener('input', recompute);
+  }
+
+  document.addEventListener('astro:page-load', init);
+</script>

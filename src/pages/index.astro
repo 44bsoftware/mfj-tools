@@ -1,0 +1,102 @@
+---
+import Layout from '../layouts/Layout.astro'
+import { getCollection } from 'astro:content'
+import { CURRENT_TAX_YEAR } from '../data/tax-years'
+
+const y = CURRENT_TAX_YEAR
+
+const articles = (await getCollection('articles'))
+  .sort((a, b) => b.data.publishedAt.getTime() - a.data.publishedAt.getTime())
+  .slice(0, 4)
+
+const calculators = [
+  {
+    href: `/w4-calculator/${y}/`,
+    title: 'Two-Earner W-4 Withholding Calculator',
+    description: 'When both spouses work, the default W-4 settings often under-withhold. This tool helps you avoid a tax-time surprise.',
+    status: 'available',
+  },
+  {
+    href: `/mfj-vs-mfs/${y}/`,
+    title: 'MFJ vs MFS Comparison',
+    description: 'Should you file jointly or separately? Compare both scenarios side-by-side based on your situation.',
+    status: 'available',
+  },
+  {
+    href: `/marriage-penalty/${y}/`,
+    title: 'Marriage Tax Penalty / Bonus',
+    description: 'See whether being married helps or hurts your combined federal tax bill.',
+    status: 'available',
+  },
+  {
+    href: `/joint-tax-estimator/${y}/`,
+    title: 'Combined Income Tax Estimator',
+    description: 'Estimate your joint federal tax liability based on two incomes, deductions, and credits.',
+    status: 'available',
+  },
+]
+---
+
+<Layout
+  title='MFJ Tools — Tax Calculators for Married Couples'
+  description='Free calculators for couples filing taxes: W-4 withholding for two earners, MFJ vs MFS comparison, marriage tax penalty, and more.'
+>
+  <section class='text-center mb-12'>
+    <h1 class='text-4xl font-bold mb-4'>Tax Calculators for Married Couples</h1>
+    <p class='text-lg text-gray-700 max-w-2xl mx-auto'>
+      Filing jointly is confusing. We built simple calculators to help married couples
+      get withholding right, decide between joint and separate filing, and understand
+      how marriage affects your tax bill.
+    </p>
+  </section>
+
+  <section class='grid gap-4 md:grid-cols-2'>
+    {calculators.map((calc) => (
+      <a
+        href={calc.status === 'available' ? calc.href : '#'}
+        class:list={[
+          'block p-6 bg-white rounded-lg border border-gray-200 transition-shadow',
+          calc.status === 'available'
+            ? 'hover:shadow-md cursor-pointer'
+            : 'opacity-60 cursor-not-allowed',
+        ]}
+      >
+        <div class='flex items-start justify-between mb-2'>
+          <h2 class='text-xl font-semibold text-blue-700'>{calc.title}</h2>
+          {calc.status === 'coming-soon' && (
+            <span class='text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded'>Coming soon</span>
+          )}
+        </div>
+        <p class='text-gray-700'>{calc.description}</p>
+      </a>
+    ))}
+  </section>
+
+  {articles.length > 0 && (
+    <section class='mt-16'>
+      <div class='flex items-baseline justify-between mb-6'>
+        <h2 class='text-2xl font-bold'>Guides</h2>
+        <a href='/articles/' class='text-sm text-blue-700 hover:underline'>All guides →</a>
+      </div>
+      <div class='grid gap-3'>
+        {articles.map((article) => (
+          <a
+            href={`/articles/${article.id}/`}
+            class='block p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow'
+          >
+            <h3 class='text-lg font-semibold text-blue-700 mb-1'>{article.data.title}</h3>
+            <p class='text-sm text-gray-700'>{article.data.description}</p>
+          </a>
+        ))}
+      </div>
+    </section>
+  )}
+
+  <section class='mt-12 p-6 bg-blue-50 border-l-4 border-blue-400 rounded'>
+    <p class='text-sm text-gray-700'>
+      <strong>Disclaimer:</strong> These calculators provide estimates based on simplified
+      tax rules. They are for informational purposes only and are not a substitute for
+      professional tax advice. Consult a CPA or enrolled agent for your specific situation.
+    </p>
+  </section>
+</Layout>
