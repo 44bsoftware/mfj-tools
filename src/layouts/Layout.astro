@@ -25,6 +25,7 @@ const {
 } = Astro.props
 
 const isDev = import.meta.env.DEV
+const GA_MEASUREMENT_ID = 'G-JMV4NDZ423'
 
 const websiteSchema = {
   '@context': 'https://schema.org',
@@ -71,6 +72,30 @@ const organizationSchema = {
 
     <script type='application/ld+json' set:html={JSON.stringify(websiteSchema)} />
     <script type='application/ld+json' set:html={JSON.stringify(organizationSchema)} />
+
+    {!isDev && (
+      <>
+        <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}></script>
+        <script is:inline define:vars={{ gaId: GA_MEASUREMENT_ID }}>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){ dataLayer.push(arguments); }
+          window.gtag = gtag;
+          gtag('js', new Date());
+          // send_page_view: false because we fire it manually below, so we get accurate page views
+          // on Astro view-transition navigations (which don't trigger a full page load).
+          gtag('config', gaId, { send_page_view: false });
+          function sendPageview() {
+            gtag('event', 'page_view', {
+              page_path: location.pathname + location.search,
+              page_location: location.href,
+              page_title: document.title,
+            });
+          }
+          sendPageview();
+          document.addEventListener('astro:after-swap', sendPageview);
+        </script>
+      </>
+    )}
 
     <ClientRouter />
   </head>
